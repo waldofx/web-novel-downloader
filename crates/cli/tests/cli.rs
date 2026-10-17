@@ -193,7 +193,7 @@ fn update_help_documents_its_flags_and_its_exit_code() {
     assert_eq!(output.status.code(), Some(0));
     let text = stdout(&output);
     assert!(text.contains("--check"), "got:\n{text}");
-    assert!(text.contains("--allow-adult"), "got:\n{text}");
+    assert!(text.contains("--session"), "got:\n{text}");
     assert!(
         text.contains("Exits 3"),
         "an exit code nobody expects must be said out loud:\n{text}"

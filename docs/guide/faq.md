@@ -29,8 +29,9 @@ including the page of the chapter you are reading.
 
 ### Can it fetch adult (R18) works?
 
-Yes, but only when you ask: `--allow-adult`. Adult sources are never included by
-accident.
+Yes. Adult sources (Narou's R18 sibling, Hameln's `h.` host) are handled like
+any other: the rating is recorded in the manifest, but nothing is refused. Each
+site enforces its own age gate, and the tool does not bypass it.
 
 ### Do I need an account?
 

@@ -121,9 +121,8 @@ the saved HTML can be re-parsed offline, without re-downloading anything.
 
 1. **Nothing is written until the table of contents succeeds**, so a bad URL or a
    dead site leaves no directory behind at all.
-2. **The adult check happens before the first write**, and after the index read:
-   the rating is a property of the *work*, not of the URL, so it cannot be
-   checked earlier.
+2. **Nothing is gated on rating**: the work's rating is recorded but never
+   refused — each site enforces its own age gate.
 3. **The plan is computed before the first request**, so "2 of 89" is known up
    front rather than discovered as it goes.
 4. **The manifest is durable before the first chapter and rewritten after each
@@ -146,9 +145,9 @@ the directory's own manifest, re-reads the index, and diffs:
 Identity is compared by chapter **url**, not by number: Kakuyomu numbers episodes
 by position, so a chapter inserted in the middle moves every later number without
 any of them becoming a different chapter. The two properties worth remembering are
-that an update **never deletes** what the user already has, and that it refuses an
-adult directory *before* the index is read, because the rating is already in the
-manifest — the one check a first download cannot make that early.
+that an update **never deletes** what the user already has, and that it never
+refuses anything on rating — each site enforces its own age gate, and the tool
+does not bypass it.
 
 Resume compares recorded hashes rather than trusting a file to exist — existence
 alone would accept a truncated or hand-edited chapter. The rule is in

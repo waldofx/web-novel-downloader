@@ -13,7 +13,7 @@ The site roadmap, in priority order, plus what it takes to add one.
 | Site | Status | Platform notes | Difficulty |
 | --- | --- | --- | --- |
 | `ncode.syosetu.com` | ✅ | **Narou** (小説家になろう), the largest JP web-novel site. Ruby is encoded in *plain text* as `｜漢字《かんじ》`, and `《》` doubles as emphasis markup. | Medium |
-| `novel18.syosetu.com` | ✅ | Narou's R18 sibling (**Nocturne**, ノクターンノベルズ). Shares the backend and HTML, so one adapter covers both; the host decides the rating. **Adult — gated.** | Low |
+| `novel18.syosetu.com` | ✅ | Narou's R18 sibling (**Nocturne**, ノクターンノベルズ). Shares the backend and HTML, so one adapter covers both; the host decides the rating. | Low |
 | `kakuyomu.jp` | ✅ | **Kakuyomu** (カクヨム), Kadokawa. A Next.js app: metadata and the episode list are read from the page's `__NEXT_DATA__` snapshot, because the rendered HTML holds only the first chapter's episodes. Real arcs (章). See [Kakuyomu notes](#kakuyomu). | Medium |
 
 ## P1 — Japanese, second wave
@@ -21,7 +21,7 @@ The site roadmap, in priority order, plus what it takes to add one.
 | Site | Status | Platform notes | Difficulty |
 | --- | --- | --- | --- |
 | `syosetu.org` | ✅ | **Hameln** (ハーメルン). Fan-fiction oriented; a different platform from Narou. Cloudflare challenge: reachable with a user-provided session (#31). Captures still needed. | Medium |
-| `h.syosetu.org` | ✅ (assumed shared) | Appears to be Hameln's adult sibling. **To verify** whether it shares Hameln's markup. **Adult — gated.** Challenge-gated too. | Low (if shared) |
+| `h.syosetu.org` | ✅ (assumed shared) | Appears to be Hameln's adult sibling. **To verify** whether it shares Hameln's markup. **Adult.** Challenge-gated too. | Low (if shared) |
 | `pixiv.net/novel` | · | Pixiv novels. Needs **login cookies** — now via a user-provided session (#31) — and/or its API for many works. Adult content possible. | High |
 
 ## P2 — TODO
@@ -110,11 +110,10 @@ per-host override is needed.
 Adult sources are supported explicitly, but gated:
 
 - Every novel carries `content_rating: "general" | "adult"` in `manifest.json`.
-- The CLI requires an explicit `--allow-adult` to fetch an adult source or work.
-- Adult sources are never fetched implicitly — not by "download everything",
-  not by a batch run.
+- Nothing is gated on it: adult works download like any other. Each site
+  enforces its own age gate, and the tool does not bypass it.
 
-This is a content-rating field in the data model, and nothing more. It is not
+It is a content-rating field in the data model, and nothing more. It is not
 access control: the tool never bypasses paywalls, logins, or age gates.
 
 ## Test fixtures

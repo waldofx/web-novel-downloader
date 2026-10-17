@@ -19,10 +19,7 @@ fn options() -> UpdateOptions {
 }
 
 fn checking() -> UpdateOptions {
-    UpdateOptions {
-        check: true,
-        ..UpdateOptions::default()
-    }
+    UpdateOptions { check: true }
 }
 
 /// Download the whole novel once, the way a user would have.
@@ -319,7 +316,7 @@ fn a_chapter_inserted_in_the_middle_is_not_mistaken_for_unchanged() {
 }
 
 #[test]
-fn an_adult_directory_is_refused_before_the_index_is_read() {
+fn an_adult_directory_updates_like_any_other() {
     let dir = TempDir::new("update-adult");
     let source = FakeSource::adult(2);
     download_from(
@@ -327,35 +324,12 @@ fn an_adult_directory_is_refused_before_the_index_is_read() {
         &client(),
         &Url::parse(&source.url).unwrap(),
         dir.path(),
-        &DownloadOptions {
-            allow_adult: true,
-            ..DownloadOptions::default()
-        },
+        &DownloadOptions::default(),
         |_| {},
     )
     .expect("the first download succeeds");
 
-    let before = source.toc_fetches();
-    let error = update_from(&source, &client(), dir.path(), &options(), |_| {}).unwrap_err();
-
-    assert!(
-        matches!(error, DownloadError::AdultRefused { .. }),
-        "got {error:?}"
-    );
-    assert_eq!(
-        source.toc_fetches(),
-        before,
-        "the stored rating is known without asking the site anything"
-    );
-
-    let (summary, _) = run(
-        &source,
-        &dir,
-        &UpdateOptions {
-            allow_adult: true,
-            ..UpdateOptions::default()
-        },
-    );
+    let (summary, _) = run(&source, &dir, &UpdateOptions::default());
     assert!(summary.up_to_date());
 }
 

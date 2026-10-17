@@ -30,8 +30,8 @@ destroying the furigana and the layout.
   respects a site's `robots.txt`. It is not a scraper that hammers a server.
 - **Resumable.** If you stop it, or the connection drops, run the same command
   again — it re-reads the chapter list and fetches only what is missing.
-- **Honest about content.** Adult sources are never fetched unless you
-  explicitly ask for them.
+- **Honest about content.** A work's rating is recorded; it is never refused
+  on it. Each site enforces its own age gate, and the tool does not bypass it.
 
 ## What it will not do
 

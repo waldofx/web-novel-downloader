@@ -41,8 +41,8 @@ nvd download https://kakuyomu.jp/works/16816452221336015212 --out ./my-novel
 # fetch it and produce a file for an e-reader in the same step
 nvd download https://ncode.syosetu.com/n0608gd/ --out ./my-novel --format epub,txt
 
-# fetch an adult work (this is the opt-in; it is never implicit)
-nvd download https://novel18.syosetu.com/n8309id/ --out ./my-novel --allow-adult
+# fetch an adult work (the site's own age gate still applies)
+nvd download https://novel18.syosetu.com/n8309id/ --out ./my-novel
 
 # see what a downloaded folder contains
 nvd info ./my-novel
@@ -60,7 +60,6 @@ Flags for `download` (`nvd download --help` lists them all):
 | --- | --- |
 | `--out`, `-o` | where to write. Required |
 | `--format` | also export: `epub`, `txt` or `md`, repeatable or comma-separated |
-| `--allow-adult` | allow adult works, which are otherwise refused before anything is written |
 | `--max-chapters` | stop after this many chapters, counting from the first |
 | `--force` | re-fetch every chapter, ignoring what is already on disk |
 | `--no-robots` | do not consult `robots.txt`. You almost certainly do not want this |
@@ -74,7 +73,6 @@ Flags for `update`:
 
 | Flag | What it does |
 | --- | --- |
-| `--allow-adult` | allow an adult directory. Refused otherwise before anything is requested, because the rating is already in its manifest |
 | `--check` | fetch every chapter and compare it, rewriting only the ones that really differ. One request per chapter: the only way to find an edit on a site that does not announce revisions |
 | `--session` | use a saved session (by name) for the hosts it names |
 

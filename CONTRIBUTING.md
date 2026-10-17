@@ -124,7 +124,7 @@ cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
 ## Ground rules
 
 - Respect each site's `robots.txt` and terms; do not circumvent paywalls.
-- Adult sources are gated behind `--allow-adult` and are never fetched implicitly.
+- Adult sources download like any other; each site enforces its own age gate. The tool never bypasses age gates, logins, or paywalls.
 - Only text nodes are ever translated; structure and ruby are preserved.
 - The on-disk format is a contract — bump `FORMAT_VERSION` if you change it.
 - Never commit `fixtures.local.json`, `cookies.json`, `.env`, `exports/`, or `raw/`.

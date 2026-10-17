@@ -52,9 +52,6 @@ enum Command {
         /// Also export the result. Repeatable or comma-separated: epub, txt, md
         #[arg(long, value_delimiter = ',')]
         format: Vec<FormatArg>,
-        /// Allow adult works (otherwise refused once the index has been read)
-        #[arg(long)]
-        allow_adult: bool,
         /// Fetch at most this many chapters, counting from the first
         #[arg(long)]
         max_chapters: Option<usize>,
@@ -83,10 +80,6 @@ enum Command {
     Update {
         /// Directory previously written by `nvd download`
         dir: PathBuf,
-        /// Allow adult works. An adult directory is refused before anything is
-        /// requested, because the rating is already recorded in its manifest
-        #[arg(long)]
-        allow_adult: bool,
         /// Fetch every chapter and compare it, rewriting only the ones that
         /// really differ. Costs one request per chapter, and is the only way to
         /// find an edit on a site that publishes no revision (Kakuyomu)
@@ -187,36 +180,24 @@ fn run(cli: Cli) -> Result<u8, String> {
             url,
             out,
             format,
-            allow_adult,
             max_chapters,
             force,
             no_robots,
             session,
         } => {
             let session = load_session(session.as_deref(), session_dir.as_deref())?;
-            download(
-                &url,
-                &out,
-                &format,
-                allow_adult,
-                max_chapters,
-                force,
-                no_robots,
-                session,
-            )
-            .map(|()| EXIT_OK)
+            download(&url, &out, &format, max_chapters, force, no_robots, session).map(|()| EXIT_OK)
         }
 
         Command::Export { dir, format } => export(&dir, &format).map(|()| EXIT_OK),
 
         Command::Update {
             dir,
-            allow_adult,
             check,
             session,
         } => {
             let session = load_session(session.as_deref(), session_dir.as_deref())?;
-            update(&dir, allow_adult, check, session)
+            update(&dir, check, session)
         }
 
         Command::Session { action } => session_cmd(action, session_dir.as_deref()),
@@ -228,7 +209,6 @@ fn download(
     url: &str,
     out: &Path,
     formats: &[FormatArg],
-    allow_adult: bool,
     max_chapters: Option<usize>,
     force: bool,
     no_robots: bool,
@@ -250,7 +230,6 @@ fn download(
         client = client.with_session(session);
     }
     let options = DownloadOptions {
-        allow_adult,
         max_chapters,
         force,
     };
@@ -265,11 +244,9 @@ fn download(
         |event| reporter.report(&event),
     )
     // Name the URL: a failure several chapters in is otherwise hard to place.
-    // `Unsupported` and `AdultRefused` already name it themselves, so prefixing
-    // would only repeat it.
+    // `Unsupported` already names it itself, so prefixing would only repeat it.
     .map_err(|error| match error {
-        wnd_download::DownloadError::Unsupported { .. }
-        | wnd_download::DownloadError::AdultRefused { .. } => error.to_string(),
+        wnd_download::DownloadError::Unsupported { .. } => error.to_string(),
         other => format!("could not download {url}: {other}"),
     })?;
 
@@ -292,18 +269,13 @@ fn download(
     Ok(())
 }
 
-fn update(
-    dir: &Path,
-    allow_adult: bool,
-    check: bool,
-    session: Option<Session>,
-) -> Result<u8, String> {
+fn update(dir: &Path, check: bool, session: Option<Session>) -> Result<u8, String> {
     let mut client = HttpClient::new(FetchPolicy::default())
         .map_err(|error| format!("could not build the HTTP client: {error}"))?;
     if let Some(session) = session {
         client = client.with_session(session);
     }
-    let options = UpdateOptions { allow_adult, check };
+    let options = UpdateOptions { check };
 
     let mut reporter = Reporter::default();
     let summary = wnd_download::update(&wnd_sources::registry(), &client, dir, &options, |event| {

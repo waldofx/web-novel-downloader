@@ -283,37 +283,10 @@ fn an_interrupted_run_leaves_a_directory_that_resumes() {
 }
 
 #[test]
-fn an_adult_novel_is_refused_before_anything_is_written() {
-    let dir = TempDir::new("adult-refused");
-    let source = FakeSource::adult(2);
-
-    let error =
-        download_from(&source, &client(), &url(), dir.path(), &options(), |_| {}).unwrap_err();
-
-    assert!(
-        matches!(error, DownloadError::AdultRefused { .. }),
-        "got {error:?}"
-    );
-    assert_eq!(source.chapter_fetches(), 0);
-    assert_eq!(
-        source.toc_fetches(),
-        1,
-        "the per-work rating is only known after the table of contents is read"
-    );
-    assert!(
-        !NovelDir::at(dir.path()).manifest_path().exists(),
-        "a refused download must leave nothing behind"
-    );
-}
-
-#[test]
-fn an_adult_novel_is_accepted_when_explicitly_allowed() {
+fn an_adult_novel_downloads_by_default() {
     let dir = TempDir::new("adult-allowed");
     let source = FakeSource::adult(2);
-    let options = DownloadOptions {
-        allow_adult: true,
-        ..DownloadOptions::default()
-    };
+    let options = DownloadOptions::default();
 
     let (summary, _) = run(&source, &dir, &options);
 

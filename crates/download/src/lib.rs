@@ -13,8 +13,8 @@
 //! # The sequence, and why it is in this order
 //!
 //! 1. Read the table of contents. Nothing is written before this succeeds.
-//! 2. Refuse adult content, unless allowed — *now*, because the per-work rating
-//!    is only known once the index has been read.
+//! 2. Nothing is gated on rating — each site enforces its own age gate, so an
+//!    adult work downloads like any other.
 //! 3. Decide what to skip. That decision is reported, so a front end can show
 //!    "2 of 89" before the first request rather than after it.
 //! 4. Write the index, then fetch. The manifest is durable before the first
@@ -43,15 +43,12 @@ use std::path::{Path, PathBuf};
 
 use url::Url;
 use wnd_core::store::storage::hash_json;
-use wnd_core::{ContentRating, HttpClient, Manifest, NovelDir};
+use wnd_core::{HttpClient, Manifest, NovelDir};
 use wnd_sources::{Source, SourceError, find};
 
 /// What to fetch, and how careful to be.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DownloadOptions {
-    /// Allow adult works. Refused otherwise — *after* the table of contents is
-    /// read, because only then is the real rating known.
-    pub allow_adult: bool,
     /// Fetch at most this many chapters, counting from the first.
     pub max_chapters: Option<usize>,
     /// Re-fetch every chapter, ignoring the hashes already on disk.
@@ -108,10 +105,6 @@ pub enum DownloadError {
     #[error(transparent)]
     Core(#[from] wnd_core::Error),
 
-    /// The work is adult content and `allow_adult` was not set.
-    #[error("{url} is adult content; re-run with --allow-adult if that is intended")]
-    AdultRefused { url: String },
-
     /// No adapter claims the URL.
     #[error("no source adapter handles {url}")]
     Unsupported { url: String },
@@ -120,10 +113,6 @@ pub enum DownloadError {
 /// What an update is allowed to do.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UpdateOptions {
-    /// Allow adult works. Refused otherwise — and, unlike a first download,
-    /// refused before the site is asked anything, because the rating is already
-    /// recorded in the directory's own manifest.
-    pub allow_adult: bool,
     /// Fetch every chapter and compare it with what is on disk, rewriting only
     /// the ones that really differ.
     ///
@@ -202,13 +191,6 @@ pub fn download_from(
 ) -> Result<Summary, DownloadError> {
     let mut manifest = source.novel(fetch, url)?;
 
-    // The rating is a property of the work, so it cannot be checked until the
-    // index has been read. Nothing has been written by this point.
-    if manifest.content_rating == ContentRating::Adult && !options.allow_adult {
-        return Err(DownloadError::AdultRefused {
-            url: url.to_string(),
-        });
-    }
     if let Some(max) = options.max_chapters {
         manifest.chapters.truncate(max);
     }
@@ -283,23 +265,7 @@ fn update_with(
 ) -> Result<UpdateSummary, DownloadError> {
     let url = novel_url(&stored)?;
 
-    // The rating is already on disk, so an adult work is refused before a single
-    // request — unlike a first download, where only the index can say what the
-    // work is.
-    if stored.content_rating == ContentRating::Adult && !options.allow_adult {
-        return Err(DownloadError::AdultRefused {
-            url: url.to_string(),
-        });
-    }
-
     let mut manifest = source.novel(fetch, &url)?;
-
-    // The index is the authority on the rating, and it can raise it on us.
-    if manifest.content_rating == ContentRating::Adult && !options.allow_adult {
-        return Err(DownloadError::AdultRefused {
-            url: url.to_string(),
-        });
-    }
 
     // What the index cannot describe: `cover` is a path to a file inside the
     // directory, which no adapter can know. Dropping it would erase a fact the

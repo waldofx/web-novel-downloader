@@ -83,7 +83,7 @@ paste the output. "Should work" is not evidence.
 | policy defaults, retry classification, backoff, `Retry-After` | `core/src/net/*` unit tests | no network |
 | `robots.txt` parsing and decisions | `core/src/net/robots.rs` | plus one live test |
 | model serialization, storage round-trip, hash stability | `core/src/store/{model,storage}.rs` | temp directories; atomic writes leave no `.tmp` behind |
-| the download sequence: resume, `--force`, `--max-chapters`, adult refusal, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
+| the download sequence: resume, `--force`, `--max-chapters`, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
 | the exports: exact TXT and Markdown documents, EPUB structure, reproducibility | `crates/export/tests/export.rs` | a novel written to a temp directory; the EPUB is read back with `zip` |
 | the excerpt from a body that is not the site: tags, comments, `<script>`/`<style>`, entities, whitespace, and the cut on a character boundary | `core/src/net/blocked.rs` | fixture captures in `crates/core/tests/fixtures/blocked/`, plus the captured Komdigi notice's own words |
 | what the fetch layer does with an answer that is not the site: the `Cf-Mitigated` header, no page-text matching, the facts that travel with a body, a redirect, and the interception probe | `crates/core/tests/blocked.rs` | a real one-shot socket on `127.0.0.1`, so it stays offline; the exact user-facing sentence is asserted |

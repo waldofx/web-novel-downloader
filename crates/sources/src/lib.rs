@@ -52,8 +52,8 @@ pub trait Source: Send + Sync {
 
     /// Content rating reported by the adapter, before any per-work refinement.
     ///
-    /// Adult-only sites return [`ContentRating::Adult`] so the CLI can refuse
-    /// them unless the user opted in.
+    /// Recorded for information; it does not gate anything. Each site enforces
+    /// its own age gate, and the tool does not bypass it.
     fn content_rating(&self) -> ContentRating;
 
     /// Fetch the novel's metadata and chapter index.
