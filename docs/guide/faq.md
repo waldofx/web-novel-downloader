@@ -16,8 +16,9 @@ See the [format](../engineering/format.md).
 
 ### Where is the furigana?
 
-Kept as data, attached to its base word. EPUB renders it as real `<ruby>`; TXT
-has to fall back to something like `漢字(かんじ)`.
+Kept as data, attached to its base word. The EPUB renders it as real `<ruby>`;
+TXT and Markdown have to fall back to something like `漢字(かんじ)`, which you can
+turn down to just `漢字` if you prefer.
 
 ### Can I download a novel that isn't Japanese?
 

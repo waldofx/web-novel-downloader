@@ -46,6 +46,9 @@ version away from coming back, and the next person will search for the *symptom*
 | A test fails and the implementation looks wrong | sometimes the **expectation** is wrong (a bad index, a trailing U+3000 that is genuinely content) | Decide which side is wrong before touching either. Fixing code to satisfy a wrong test is worse than red — see the `test-first` skill |
 | `cargo clippy` is clean but the test code has warnings | `--all-targets` was omitted | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Clippy fails a loop that walks a `Vec` by index ("the loop variable is used to index …") | `needless_range_loop` — and it fires even when the collection being indexed is a *different* one from the collection being iterated | Iterate the one you only read (`for (position, skip) in skips.iter().enumerate()`) and index the one the body must mutate |
+| `if let Some(x) = a && b` compiles locally but not for someone on the stated MSRV | let-chains are Rust **1.88**; this workspace claims `rust-version = "1.85"` | Chain with combinators instead — `a.as_ref().filter(\|x\| b)` — or nest the `if`. Do not "fix" it by raising `rust-version` without a decision |
+| `writeln!(s, …)` on a `String` will not compile, or adding `use std::io::Write` breaks `write_all` | both traits are named `Write`, and `writeln!` needs the `std::fmt` one while `write_all` needs the `std::io` one | Import both anonymously: `use std::fmt::Write as _;` and `use std::io::Write as _;` |
+| A dependency build pulls in a C toolchain, or is far slower to compile than expected | `zip`'s **default features** enable zopfli (optimal but slow), plus lzma, bzip2, zstd and AES | Depend on the slice you need: `zip = { version = "7", default-features = false, features = ["deflate-flate2"] }` — pure Rust, sane speed |
 
 ## Format and storage
 
@@ -55,3 +58,14 @@ version away from coming back, and the next person will search for the *symptom*
 | The manifest records a hash but the chapter file is empty, stale, or hand-edited | the file write and the manifest update are separate steps, so a kill between them leaves the two disagreeing | Resume verifies the **content hash**, never existence. Do not "simplify" that check to `exists()`: it would accept exactly the cases the hash exists to catch |
 | A chapter was re-fetched although it was already on disk | resume trusts file existence instead of content | Resume only when the stored hash exists, the file exists, **and** re-hashing the file reproduces the stored hash |
 | An adapter was blamed for an empty chapter that was never cached | a page with no text block returned an empty chapter instead of an error | A chapter page with no text container is `SourceError::Parse` — silence there hides adapter rot |
+
+## Exports
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| A reader says the file "is not a valid EPUB", or refuses it outright | `mimetype` was not the first entry in the ZIP, or it was deflated | It must be first **and** `CompressionMethod::Stored`, containing exactly `application/epub+zip`. This is a property of the bytes, so the test parses the local file header by hand — nothing an archive reader reports will tell you |
+| Two exports of one novel differ, so a re-export churns in git | something read the clock, or iterated a `HashMap` | ZIP stores a modification time per entry, so write every entry with a fixed `DateTime::DEFAULT`; sort and de-duplicate the image list; take the EPUB's `dcterms:modified` from `manifest.fetched_at`, never from "now". See [export.md](export.md#determinism) |
+| The exported file's name is not the path the code reported | Windows silently strips a trailing dot or space from a file name | Trim trailing `.` and spaces when deriving a name from the title, so the file that gets written is the path that was returned |
+| Furigana reads as `漢字かんじ` on an e-reader | a reader that ignores `<ruby>` shows the `<rt>` content inline | Emit `<rp>(</rp>` and `<rp>)</rp>` around the reading: a reader that ignores ruby renders `漢字(かんじ)` instead |
+| Every illustration in the EPUB is a broken link | the model's `src` is relative to the **novel directory**, but the document is not (EPUB: `text/`, Markdown: `exports/`) | Prefix the path so it is relative to the document doing the referencing — `../images/…` in both cases. A test that asserts the attribute is cheaper than opening a reader |
+| A synopsis loses its line breaks in the EPUB | a newline is only whitespace in XHTML | Turn newlines into `<br />` when rendering text that came from a `<br>` in the source |
