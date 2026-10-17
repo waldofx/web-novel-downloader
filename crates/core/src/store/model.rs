@@ -86,6 +86,21 @@ pub struct Manifest {
     /// Path to the cover image, relative to the novel directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover: Option<String>,
+    /// URL of the cover image, as the source states it.
+    ///
+    /// Kept separate from `cover`, which is a path to an image that has been
+    /// *fetched* into `images/`. A source can know the URL without anything having
+    /// been fetched yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// The site's one-line catchphrase, kept separate from the synopsis.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catchphrase: Option<String>,
+    /// Content warnings the source publishes for this work (e.g. "sexual",
+    /// "violent", "cruel"). A warning is not a rating: it describes what the work
+    /// contains, and is shown on all-ages sites too.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     /// RFC 3339 timestamp of the most recent fetch. Filled in by the fetcher.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fetched_at: Option<String>,
@@ -106,6 +121,9 @@ impl Manifest {
             tags: Vec::new(),
             synopsis: None,
             cover: None,
+            cover_url: None,
+            catchphrase: None,
+            warnings: Vec::new(),
             fetched_at: None,
             chapters: Vec::new(),
         }
