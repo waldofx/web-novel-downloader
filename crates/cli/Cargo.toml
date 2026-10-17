@@ -1,0 +1,16 @@
+[package]
+name = "wnd-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Command-line interface for web-novel-downloader"
+
+[[bin]]
+name = "nvd"
+path = "src/main.rs"
+
+[dependencies]
+wnd-core.workspace = true
+wnd-sources.workspace = true
+clap.workspace = true
+url.workspace = true

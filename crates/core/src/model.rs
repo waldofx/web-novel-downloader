@@ -1,0 +1,302 @@
+//! The data model of a downloaded novel.
+//!
+//! This is the interchange format between the downloader, the exporters, and the
+//! future translation stage. See `DESIGN.md` for the rationale; the tests here
+//! assert that the serialized shape still matches what that document describes.
+
+use serde::{Deserialize, Serialize};
+
+/// Version of the on-disk format. Bump when the shape changes incompatibly.
+pub const FORMAT_VERSION: u32 = 1;
+
+/// Whether a work is safe for general audiences or is adult content.
+///
+/// This is a content rating, not an access control: the tool never bypasses
+/// age gates, logins, or paywalls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContentRating {
+    #[default]
+    General,
+    Adult,
+}
+
+/// Where a novel came from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceInfo {
+    /// Adapter id, e.g. `narou`.
+    pub id: String,
+    /// Canonical URL of the novel's table of contents.
+    pub novel_url: String,
+    /// The site's own title, kept for reference when it differs from ours.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub site_title: Option<String>,
+}
+
+/// One entry in the manifest's chapter index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChapterMeta {
+    pub index: u32,
+    pub title: String,
+    pub url: String,
+    /// RFC 3339, when the site exposes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<String>,
+    /// Hash of the chapter's canonical JSON, used to detect changes cheaply.
+    pub hash: String,
+    /// Path to the chapter file, relative to the novel directory.
+    pub file: String,
+}
+
+/// Top-level metadata for one downloaded novel (`manifest.json`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Manifest {
+    pub format_version: u32,
+    pub source: SourceInfo,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    /// BCP 47 language tag of the *source* text, e.g. `ja`.
+    pub language: String,
+    pub content_rating: ContentRating,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synopsis: Option<String>,
+    /// Path to the cover image, relative to the novel directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<String>,
+    /// RFC 3339 timestamp of the most recent fetch. Filled in by the fetcher.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetched_at: Option<String>,
+    #[serde(default)]
+    pub chapters: Vec<ChapterMeta>,
+}
+
+impl Manifest {
+    /// A manifest for a newly discovered novel, with no chapters fetched yet.
+    pub fn new(source: SourceInfo, title: impl Into<String>, language: impl Into<String>) -> Self {
+        Self {
+            format_version: FORMAT_VERSION,
+            source,
+            title: title.into(),
+            author: None,
+            language: language.into(),
+            content_rating: ContentRating::General,
+            tags: Vec::new(),
+            synopsis: None,
+            cover: None,
+            fetched_at: None,
+            chapters: Vec::new(),
+        }
+    }
+
+    pub fn chapter(&self, index: u32) -> Option<&ChapterMeta> {
+        self.chapters.iter().find(|c| c.index == index)
+    }
+}
+
+/// A block-level element of chapter content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Block {
+    Paragraph {
+        children: Vec<Inline>,
+    },
+    Heading {
+        level: u8,
+        children: Vec<Inline>,
+    },
+    SceneBreak,
+    HorizontalRule,
+    Image {
+        src: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alt: Option<String>,
+    },
+}
+
+/// An inline element. Only [`Inline::Text`] carries prose to translate; every
+/// other variant exists to preserve structure and styling around it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Inline {
+    Text {
+        value: String,
+    },
+    /// Furigana. First-class because Japanese web novels use it constantly, and
+    /// because Narou-family sites encode it as plain text (`｜漢字《かんじ》`).
+    Ruby {
+        base: String,
+        reading: String,
+    },
+    Emphasis {
+        children: Vec<Inline>,
+    },
+    Strong {
+        children: Vec<Inline>,
+    },
+    Link {
+        href: String,
+        children: Vec<Inline>,
+    },
+}
+
+/// One chapter (`chapters/NNNN.json`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Chapter {
+    pub format_version: u32,
+    pub index: u32,
+    pub title: String,
+    #[serde(default)]
+    pub nodes: Vec<Block>,
+    /// 前書き — the author's note before the chapter body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pre_note: Vec<Block>,
+    /// 後書き — the author's note after the chapter body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub post_note: Vec<Block>,
+}
+
+impl Chapter {
+    pub fn new(index: u32, title: impl Into<String>) -> Self {
+        Self {
+            format_version: FORMAT_VERSION,
+            index,
+            title: title.into(),
+            nodes: Vec::new(),
+            pre_note: Vec::new(),
+            post_note: Vec::new(),
+        }
+    }
+
+    /// Every translatable string in the chapter, in reading order.
+    pub fn translatable_texts(&self) -> impl Iterator<Item = &str> {
+        let blocks = self
+            .nodes
+            .iter()
+            .chain(&self.pre_note)
+            .chain(&self.post_note);
+        blocks.flat_map(block_texts)
+    }
+}
+
+fn block_texts(block: &Block) -> Box<dyn Iterator<Item = &str> + '_> {
+    match block {
+        Block::Paragraph { children } | Block::Heading { children, .. } => {
+            Box::new(inline_texts(children))
+        }
+        Block::SceneBreak | Block::HorizontalRule | Block::Image { .. } => {
+            Box::new(std::iter::empty())
+        }
+    }
+}
+
+fn inline_texts(inline: &[Inline]) -> impl Iterator<Item = &str> {
+    inline
+        .iter()
+        .flat_map(|node| -> Box<dyn Iterator<Item = &str> + '_> {
+            match node {
+                Inline::Text { value } => Box::new(std::iter::once(value.as_str())),
+                Inline::Emphasis { children } | Inline::Strong { children } => {
+                    Box::new(inline_texts(children))
+                }
+                Inline::Link { children, .. } => Box::new(inline_texts(children)),
+                // Ruby's base is the text that gets translated; its reading is
+                // annotation and is handled deliberately by the translation stage.
+                Inline::Ruby { base, .. } => Box::new(std::iter::once(base.as_str())),
+            }
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(value: &str) -> Inline {
+        Inline::Text {
+            value: value.to_string(),
+        }
+    }
+
+    #[test]
+    fn chapter_json_matches_the_documented_shape() {
+        // The exact example from DESIGN.md. If this stops parsing, the docs and
+        // the code have drifted apart.
+        let json = r#"{
+          "format_version": 1,
+          "index": 1,
+          "title": "…",
+          "nodes": [
+            { "type": "paragraph", "children": [ { "type": "text", "value": "…" } ] },
+            { "type": "paragraph", "children": [
+                { "type": "ruby", "base": "漢字", "reading": "かんじ" },
+                { "type": "text", "value": "の" },
+                { "type": "emphasis", "children": [ { "type": "text", "value": "…" } ] }
+            ] },
+            { "type": "scene_break" },
+            { "type": "image", "src": "images/0001-1.png", "alt": "…" },
+            { "type": "horizontal_rule" }
+          ]
+        }"#;
+
+        let chapter: Chapter = serde_json::from_str(json).expect("documented shape must parse");
+
+        assert_eq!(chapter.format_version, FORMAT_VERSION);
+        assert_eq!(chapter.nodes.len(), 5);
+        assert!(chapter.pre_note.is_empty());
+
+        let want = vec!["…", "漢字", "の", "…"];
+        assert_eq!(chapter.translatable_texts().collect::<Vec<_>>(), want);
+    }
+
+    #[test]
+    fn unknown_version_is_preserved_for_the_caller_to_check() {
+        // serde alone must not silently coerce versions; storage validates.
+        let json = r#"{ "format_version": 99, "index": 1, "title": "t", "nodes": [] }"#;
+        let chapter: Chapter = serde_json::from_str(json).unwrap();
+        assert_eq!(chapter.format_version, 99);
+    }
+
+    #[test]
+    fn optional_fields_are_omitted_not_null() {
+        let chapter = Chapter::new(3, "第三章");
+        let json = serde_json::to_string(&chapter).unwrap();
+        assert!(json.contains(r#""index":3"#));
+        assert!(!json.contains("pre_note"), "empty notes must be omitted");
+        assert!(
+            !json.contains("null"),
+            "optionals must be omitted, not null: {json}"
+        );
+    }
+
+    #[test]
+    fn ruby_and_emphasis_survive_a_round_trip() {
+        let mut chapter = Chapter::new(1, "t");
+        chapter.nodes.push(Block::Paragraph {
+            children: vec![
+                Inline::Ruby {
+                    base: "漢字".into(),
+                    reading: "かんじ".into(),
+                },
+                text("の"),
+                Inline::Strong {
+                    children: vec![text("強調")],
+                },
+            ],
+        });
+
+        let json = serde_json::to_string(&chapter).unwrap();
+        let back: Chapter = serde_json::from_str(&json).unwrap();
+        assert_eq!(chapter, back);
+    }
+
+    #[test]
+    fn content_rating_serializes_as_snake_case() {
+        assert_eq!(
+            serde_json::to_string(&ContentRating::Adult).unwrap(),
+            r#""adult""#
+        );
+        assert_eq!(ContentRating::default(), ContentRating::General);
+    }
+}

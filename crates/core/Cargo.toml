@@ -1,0 +1,12 @@
+[package]
+name = "wnd-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Data model, storage, and fetch policy for web-novel-downloader"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
