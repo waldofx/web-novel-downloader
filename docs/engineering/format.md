@@ -39,6 +39,7 @@ drift. Anything in `exports/` can be deleted and rebuilt.
       "url": "…",
       "arc": "第一章",
       "published_at": "2020-04-01T23:23:00+09:00",
+      "revised_at": "2023-09-01T14:36:00+09:00",
       "hash": "sha256:…",
       "file": "chapters/0001.json"
     }
@@ -48,14 +49,25 @@ drift. Anything in `exports/` can be deleted and rebuilt.
 
 `content_rating` is `general` or `adult`.
 
-**Optional fields are omitted, never null.** `arc`, `published_at`, `author`,
-`synopsis`, `tags`, and `cover` are absent when the site does not expose them.
-`hash` is absent until the chapter has been downloaded at least once — an
+**Optional fields are omitted, never null.** `arc`, `published_at`, `revised_at`,
+`author`, `synopsis`, `tags`, and `cover` are absent when the site does not expose
+them. `hash` is absent until the chapter has been downloaded at least once — an
 adapter cannot know a chapter's hash before fetching it, so the field is
 `Option<String>` in the model and skipped when `None`.
 
-`format_version` is `FORMAT_VERSION` in `crates/core/src/store/model.rs`, and it
-is bumped when the meaning of anything above changes.
+`published_at` is when the chapter appeared and `revised_at` is when the site says
+it was last revised — two facts, and conflating them would rewrite publication
+history on every edit. Narou prints the revision time on revised rows only; a site
+that publishes none states nothing, and `nvd update` treats "the index says
+nothing" as "not fetched" unless `--check` is asked for it.
+
+`format_version` is `FORMAT_VERSION` in `crates/core/src/store/model.rs`. It is
+bumped **only** when the meaning of something above changes incompatibly, so an
+older file is readable by definition and is read as a matter of course. A *newer*
+one is refused: it may mean things this build does not. That is what lets an
+additive optional field arrive without stranding every directory already on disk —
+whereas bumping for one would make `nvd update` unable to read the very
+directories it exists to update.
 
 ## Chapter JSON
 
@@ -156,6 +168,37 @@ what makes resume and update cheap:
 - `--force` ignores stored hashes and re-fetches everything.
 - A stored manifest whose `source.novel_url` differs from the requested novel is
   ignored, not trusted.
+
+### What `nvd update` treats as changed
+
+An update is `nvd download` with a memory. The novel comes from the directory's
+own `manifest.json` — an update is a thing done *to a directory*, so no URL is
+given — and the index as it stands now is diffed against what the last run
+recorded:
+
+| The index now… | What happens | Why |
+| --- | --- | --- |
+| lists a chapter the directory has never seen | fetched | it is new |
+| says a chapter was **revised** — `revised_at` differs from the recorded value, in either direction | fetched | the file is known to be older, and a stamp that *appears* where there was none is not evidence that the file is current |
+| still lists a chapter whose file hashes to the recorded hash | not requested at all | nothing says otherwise |
+| no longer lists a chapter | reported, and **nothing is deleted** | the user's copy is theirs; a grep of the output is a better record than a silent `rm` |
+| says nothing about revisions (Kakuyomu publishes none) | not requested — unless `--check` is given | one request per chapter is a real cost, so it is opt-in |
+
+Chapter identity is the **url**, never the number. Kakuyomu numbers episodes by
+position and gives each an opaque id, so an episode inserted in the middle of a
+work moves every later number without any of them becoming a different chapter. A
+comparison by number would report those as changed — and a hash-only comparison
+would do something worse: skip them, and leave the *previous* chapter's text under
+every shifted number.
+
+`--check` is the honest cover for a site that announces nothing: every chapter is
+fetched, compared with what is on disk, and only the ones that really differ are
+written. That is `chapters_checked` in the summary — fetched, compared, unchanged,
+not written.
+
+An update follows the index, which means a directory downloaded with
+`--max-chapters` grows to the whole novel on its first update: the cap was a
+download-time choice, and nothing on disk records that it was ever made.
 
 ## Storage mechanics
 

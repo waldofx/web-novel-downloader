@@ -48,6 +48,21 @@ No. Run the same command again: it re-reads the chapter list, checks each
 chapter's recorded hash, and fetches only what is missing — or what changed on
 disk since it was written.
 
+### The novel has new chapters now. How do I get them?
+
+`nvd update ./my-novel` — no URL, because the address is already in the folder's
+own `manifest.json`. It fetches chapters that are new, and chapters the site says
+were revised; it leaves everything else alone without a request. It exits `3` when
+there was nothing to do, so a nightly job can tell "nothing new" from "it broke".
+
+If it exits `0` but you expected new chapters, check the `gone:` lines: the
+author may have removed a chapter, which an update reports and never deletes.
+
+Some sites do not announce revisions at all (Kakuyomu does not), so an edit there
+goes unnoticed by default. `nvd update ./my-novel --check` fetches every chapter
+and compares it, rewriting only the ones that really differ. It costs one request
+per chapter, which is why it is not what happens by default.
+
 ### Where did the author's notes go?
 
 They are kept, separately from the chapter body, so you can keep them, hide

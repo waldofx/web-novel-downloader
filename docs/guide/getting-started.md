@@ -3,17 +3,17 @@
 ## Status (October 2026)
 
 **Working end to end for Narou.** `nvd download` fetches a novel and its chapters
-into a structured directory, `nvd export` turns one into an EPUB, a text file or
-Markdown, and `nvd info` describes a directory you already have. `nvd update` is
-not implemented yet, and other sites come next — see the
+into a structured directory, `nvd update` fetches only what is new or changed,
+`nvd export` turns one into an EPUB, a text file or Markdown, and `nvd info`
+describes a directory you already have. Other sites come next — see the
 [roadmap](../engineering/architecture.md#roadmap).
 
 | Command | State |
 | --- | --- |
 | `nvd download <url> --out <dir>` | works |
+| `nvd update <dir>` | works |
 | `nvd export <dir> --format epub` | works |
 | `nvd info <dir>` | works |
-| `nvd update <dir>` | not implemented yet |
 
 ## Build it
 
@@ -68,12 +68,27 @@ There is no `--resume` flag because resuming is what happens by default: run the
 same command again and it fetches only what is missing. `--force` is the opposite.
 `nvd export` takes `--format` and defaults to `epub`.
 
+Flags for `update`:
+
+| Flag | What it does |
+| --- | --- |
+| `--allow-adult` | allow an adult directory. Refused otherwise before anything is requested, because the rating is already in its manifest |
+| `--check` | fetch every chapter and compare it, rewriting only the ones that really differ. One request per chapter: the only way to find an edit on a site that does not announce revisions |
+
+`nvd update` reads the novel's address out of the directory's own `manifest.json`,
+so it takes no URL: it is something you do *to a folder*. A chapter is fetched when
+it is new, or when the site says it was revised. A chapter that has disappeared
+from the site's index is reported and left on disk — never deleted. Everything
+else is left alone, without a request.
+
 Two conventions make it scriptable:
 
 - **Progress goes to stderr, the summary to stdout.** `nvd download … >
   summary.txt` captures the result rather than the progress meter.
 - **Exit codes mean something**: `0` on success, `1` on failure, `2` for a bad
-  command line.
+  command line, and — for `nvd update` only — `3` when there was nothing new or
+  changed, so a scheduled run can tell that apart from a failure without reading
+  the output.
 
 ## What lands on disk
 
