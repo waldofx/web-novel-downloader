@@ -265,7 +265,13 @@ fn download(
         |event| reporter.report(&event),
     )
     // Name the URL: a failure several chapters in is otherwise hard to place.
-    .map_err(|error| format!("could not download {url}: {error}"))?;
+    // `Unsupported` and `AdultRefused` already name it themselves, so prefixing
+    // would only repeat it.
+    .map_err(|error| match error {
+        wnd_download::DownloadError::Unsupported { .. }
+        | wnd_download::DownloadError::AdultRefused { .. } => error.to_string(),
+        other => format!("could not download {url}: {other}"),
+    })?;
 
     println!("{}", summary.title);
     println!(

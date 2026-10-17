@@ -104,6 +104,11 @@ fn a_url_no_adapter_claims_fails_and_names_the_url() {
     assert_eq!(output.status.code(), Some(1));
     let text = stderr(&output);
     assert!(text.contains(url), "the error must name the URL:\n{text}");
+    assert_eq!(
+        text.matches(url).count(),
+        1,
+        "the URL must be printed once, not twice:\n{text}"
+    );
     assert!(
         !text.contains("panicked") && !text.contains("RUST_BACKTRACE"),
         "no backtraces:\n{text}"
