@@ -62,8 +62,9 @@ Two details that matter:
 - The group that applies is the one for **our own** user-agent, falling back to
   `*` — not the rules for some other crawler.
 - The escape hatch is `FetchPolicy::respect_robots = false`, surfaced to users as
-  a CLI flag. It exists for unusual cases, it is not the default, and it is not a
-  licence to ignore a site's wishes. See [Stance](#stance).
+  `nvd download --no-robots`, which says out loud that it is ignoring the file. It
+  exists for unusual cases, it is not the default, and it is not a licence to
+  ignore a site's wishes. See [Stance](#stance).
 
 ## The raw cache
 

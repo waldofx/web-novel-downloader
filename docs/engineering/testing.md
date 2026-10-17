@@ -80,4 +80,5 @@ paste the output. "Should work" is not evidence.
 | the download sequence: resume, `--force`, `--max-chapters`, adult refusal, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
 | the exports: exact TXT and Markdown documents, EPUB structure, reproducibility | `crates/export/tests/export.rs` | a novel written to a temp directory; the EPUB is read back with `zip` |
 | Narou DOM helpers, notation, blank lines, TOC, dates | `sources/src/narou/*` | fixture files |
+| the whole pipeline under the real binary: exit codes, which stream output goes to, flags, `--help` | `crates/cli/tests/cli.rs` | runs `nvd` itself, so no library test can cover it. Offline, except one `#[ignore]`d test that downloads two chapters for real |
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |
