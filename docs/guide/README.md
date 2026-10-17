@@ -44,5 +44,6 @@ destroying the furigana and the layout.
 ## Where to go next
 
 - [getting-started.md](getting-started.md) — build it, run it
+- [sessions.md](sessions.md) — the cookie jars for challenged sites
 - [faq.md](faq.md) — the questions that keep coming up
 - The [engineering docs](../engineering/) — for the code itself
