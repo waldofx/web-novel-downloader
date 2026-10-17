@@ -163,6 +163,24 @@ impl NovelDir {
 ///
 /// Returns the number of bytes written.
 fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<u64> {
+    write_json_with(path, value, None)
+}
+
+/// The same, for a file that holds a credential.
+///
+/// The permissions are set on the temporary file **before** it is renamed into
+/// place, so the secret is never briefly readable by anyone else.
+pub(crate) fn write_json_private<T: serde::Serialize>(path: &Path, value: &T) -> Result<u64> {
+    write_json_with(path, value, Some(PRIVATE_FILE_MODE))
+}
+
+/// What a file only its owner may read is set to, where permissions exist.
+#[cfg(unix)]
+pub(crate) const PRIVATE_FILE_MODE: u32 = 0o600;
+#[cfg(not(unix))]
+pub(crate) const PRIVATE_FILE_MODE: u32 = 0;
+
+fn write_json_with<T: serde::Serialize>(path: &Path, value: &T, mode: Option<u32>) -> Result<u64> {
     // Pretty-printed: these files are meant to be diffed and read by humans,
     // and they are the input to a translation stage.
     let mut json = serde_json::to_string_pretty(value)?;
@@ -173,11 +191,32 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<u64> {
         let _ = fs::remove_file(&temporary);
         return Err(error.into());
     }
+    if let Err(error) = set_permissions(&temporary, mode) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
     if let Err(error) = fs::rename(&temporary, path) {
         let _ = fs::remove_file(&temporary);
         return Err(error.into());
     }
     Ok(json.len() as u64)
+}
+
+/// `0600` on `path`, where the platform has such a thing.
+#[cfg(unix)]
+fn set_permissions(path: &Path, mode: Option<u32>) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    match mode {
+        Some(mode) => fs::set_permissions(path, fs::Permissions::from_mode(mode)),
+        None => Ok(()),
+    }
+}
+
+/// Windows has no read permission to set; the file is already the user's.
+#[cfg(not(unix))]
+fn set_permissions(_path: &Path, _mode: Option<u32>) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// `<path>.tmp`, a sibling of the target so the rename stays on one filesystem.

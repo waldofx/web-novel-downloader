@@ -20,7 +20,7 @@ use std::fmt;
 use std::net::IpAddr;
 
 /// One cookie, as a browser export writes it.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Cookie {
     /// The domain the cookie applies to, without a leading dot.
     pub domain: String,
@@ -30,6 +30,7 @@ pub struct Cookie {
     pub path: String,
     pub secure: bool,
     /// Unix seconds at which it expires, or `None` for a session cookie.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<u64>,
     pub name: String,
     pub value: String,
