@@ -231,3 +231,79 @@ fn downloads_a_real_novel_end_to_end() {
         stdout(&again)
     );
 }
+
+/// The same pipeline, against the other site — driven from a URL a reader would
+/// actually paste: the **episode page they have open**, not the work page.
+///
+/// Kakuyomu numbers its episodes nowhere a URL can be derived from, so this also
+/// checks that an episode URL reduces to the work it belongs to.
+#[test]
+#[ignore = "needs the network and a live site"]
+fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
+    const WORK: &str = "https://kakuyomu.jp/works/11054822663954717597";
+    const EPISODE: &str =
+        "https://kakuyomu.jp/works/11054822663954717597/episodes/11054822663955326556";
+
+    let guard = TempDir::new("live-kakuyomu");
+    let out = guard.path().join("novel");
+
+    let output = nvd(&[
+        "download",
+        EPISODE,
+        "--out",
+        out.to_str().unwrap(),
+        "--max-chapters",
+        "2",
+        "--format",
+        "txt",
+    ]);
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert!(
+        stdout(&output).contains("2 fetched, 0 skipped, 2 total"),
+        "got:\n{}",
+        stdout(&output)
+    );
+
+    let manifest = wnd_core::NovelDir::at(&out).read_manifest().unwrap();
+    assert_eq!(manifest.source.id, "kakuyomu");
+    assert_eq!(
+        manifest.source.novel_url, WORK,
+        "an episode URL resolves to its work, not to itself"
+    );
+    assert!(manifest.author.is_some());
+    assert!(
+        !manifest.tags.is_empty(),
+        "tags come from the page snapshot"
+    );
+    assert!(
+        manifest
+            .synopsis
+            .as_deref()
+            .is_some_and(|s| s.contains('\n')),
+        "the synopsis keeps its paragraph breaks"
+    );
+    assert_eq!(
+        manifest.chapters.len(),
+        2,
+        "--max-chapters truncated the index"
+    );
+
+    let first = &manifest.chapters[0];
+    assert_eq!(first.title, "第1話　勇者、魔王の軍門に下る");
+    assert_eq!(
+        first.arc, None,
+        "this work has no arcs, and none is invented"
+    );
+    assert!(
+        first
+            .published_at
+            .as_deref()
+            .is_some_and(|at| at.ends_with('Z')),
+        "Kakuyomu states an instant in UTC: {:?}",
+        first.published_at
+    );
+
+    let text = fs::read_to_string(exported(&out, "txt")).unwrap();
+    assert!(text.lines().count() > 5, "got:\n{text}");
+}

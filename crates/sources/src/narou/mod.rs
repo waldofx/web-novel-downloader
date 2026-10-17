@@ -21,10 +21,10 @@
 //!   chapter — silence there would hide adapter rot.
 
 mod chapter;
-mod dom;
 mod inline;
 mod toc;
 
+use crate::selectors::selector;
 use crate::{Source, SourceError};
 use scraper::Selector;
 use std::collections::HashSet;
@@ -47,17 +47,7 @@ pub const ADULT_HOST: &str = "novel18.syosetu.com";
 /// site bug cannot spin forever.
 const MAX_TOC_PAGES: usize = 100;
 
-/// Selectors for Narou's markup, parsed once.
-///
-/// They all live here, in the adapter's root, so that the whole of "what Narou's
-/// HTML looks like" is one screen.
-macro_rules! selector {
-    ($name:ident, $css:literal) => {
-        static $name: LazyLock<Selector> =
-            LazyLock::new(|| Selector::parse($css).expect("selector literals are valid"));
-    };
-}
-
+// Selectors for Narou's markup, parsed once.
 selector!(SEL_TITLE, "h1.p-novel__title");
 selector!(SEL_AUTHOR, ".p-novel__author");
 selector!(SEL_SUMMARY, ".p-novel__summary");

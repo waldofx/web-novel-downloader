@@ -1,20 +1,17 @@
-//! One chapter page: the preface, the body, the afterword, and Narou's
-//! blank-line convention.
+//! One chapter page: the preface, the body, and the afterword.
 //!
 //! Narou emits one `<p>` per line. A blank line is a `<p>` whose only content is
-//! a `<br>`, and a run of blank lines is how authors mark a scene change — so
-//! the run length is meaning and cannot simply be collapsed:
-//!
-//! - a single blank line is a paragraph separator, and disappears;
-//! - two or more become one [`Block::SceneBreak`];
-//! - leading and trailing blanks are dropped.
+//! a `<br>`, and a run of blank lines is how authors mark a scene change. The
+//! rule for what a run means is shared with the other adapters — it is the same
+//! rule everywhere — and lives in [`crate::blocks`].
 
-use super::dom::{element_text, is_class};
 use super::inline::inlines_of;
 use super::{SEL_PARAGRAPH, SEL_TEXT_BLOCK};
 use crate::SourceError;
+use crate::blocks;
+use crate::dom::{element_text, is_class};
 use scraper::{ElementRef, Html};
-use wnd_core::{Block, Chapter, ChapterMeta, Inline};
+use wnd_core::{Chapter, ChapterMeta, Inline};
 
 /// Parse a chapter page into the node model.
 pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceError> {
@@ -24,7 +21,7 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
 
     for container in document.select(&SEL_TEXT_BLOCK) {
         containers += 1;
-        let blocks = blocks_from_lines(container_lines(&container));
+        let blocks = blocks::from_lines(container_lines(&container));
         if is_class(&container, "p-novel__text--preface") {
             chapter.pre_note = blocks;
         } else if is_class(&container, "p-novel__text--afterword") {
@@ -60,35 +57,11 @@ fn container_lines(container: &ElementRef) -> Vec<Option<Vec<Inline>>> {
         .collect()
 }
 
-/// Turn lines into blocks, applying Narou's blank-line convention:
-/// a single blank is a paragraph separator and disappears, a run of two or more
-/// becomes one [`Block::SceneBreak`], and leading/trailing blanks are dropped.
-fn blocks_from_lines(lines: Vec<Option<Vec<Inline>>>) -> Vec<Block> {
-    let mut blocks = Vec::new();
-    let mut blanks = 0usize;
-
-    for line in lines {
-        match line {
-            None => blanks += 1,
-            Some(children) => {
-                // `!blocks.is_empty()` drops a leading run of blanks.
-                if blanks >= 2 && !blocks.is_empty() {
-                    blocks.push(Block::SceneBreak);
-                }
-                blanks = 0;
-                if !children.is_empty() {
-                    blocks.push(Block::Paragraph { children });
-                }
-            }
-        }
-    }
-    blocks
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fixtures::{NAROU_CHAPTER, NAROU_SHORT_STORY};
+    use wnd_core::Block;
 
     fn text(value: &str) -> Inline {
         Inline::Text {
@@ -250,42 +223,6 @@ mod tests {
             chapter.post_note.len(),
             1,
             "the afterword is still kept separate"
-        );
-    }
-
-    #[test]
-    fn blank_line_rules_are_applied_directly() {
-        let line = |value: &str| {
-            Some(vec![Inline::Text {
-                value: value.to_string(),
-            }])
-        };
-        let blocks = blocks_from_lines(vec![
-            None,
-            None,
-            line("a"),
-            None,
-            line("b"),
-            None,
-            None,
-            line("c"),
-            None,
-        ]);
-        assert_eq!(
-            blocks,
-            vec![
-                Block::Paragraph {
-                    children: vec![text("a")]
-                },
-                Block::Paragraph {
-                    children: vec![text("b")]
-                },
-                Block::SceneBreak,
-                Block::Paragraph {
-                    children: vec![text("c")]
-                },
-            ],
-            "leading and trailing blanks drop; single blank drops; two become a scene break"
         );
     }
 

@@ -11,10 +11,10 @@
 //! different fact, and taking it would rewrite history on every edit.
 
 use super::chapter_file;
-use super::dom::{element_text, first_text, is_class};
 use super::{
     SEL_ANCHOR, SEL_AUTHOR, SEL_PAGER_NEXT, SEL_SUMMARY, SEL_TITLE, SEL_TOC_ENTRY, SEL_UPDATE,
 };
+use crate::dom::{element_text, first_text, is_class};
 use scraper::{ElementRef, Html};
 use url::Url;
 use wnd_core::ChapterMeta;

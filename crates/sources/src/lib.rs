@@ -7,12 +7,27 @@
 //!
 //! - [`narou`] — `ncode.syosetu.com` and its R18 sibling `novel18.syosetu.com`,
 //!   split into table-of-contents, chapter, inline, and DOM parts.
+//! - [`kakuyomu`] — `kakuyomu.jp`, Kadokawa's site, read from the page's
+//!   Next.js snapshot where the HTML alone would be incomplete.
+//!
+//! The parts every site shares are not in the adapters: [`dom`] pulls text out
+//! of HTML, [`blocks`] applies the blank-line convention, [`inline`] decodes the
+//! inline markup (`<ruby>`, `<strong>`, `<a>`), and [`selectors`] holds the
+//! macro that keeps a selector literal out of the request path. An adapter
+//! supplies only what is peculiar to its site.
 
+pub mod kakuyomu;
 pub mod narou;
+
+mod blocks;
+mod dom;
+mod inline;
+mod selectors;
 
 #[cfg(test)]
 mod fixtures;
 
+use crate::kakuyomu::Kakuyomu;
 use crate::narou::Narou;
 use url::Url;
 use wnd_core::HttpClient;
@@ -43,7 +58,7 @@ pub trait Source: Send + Sync {
 ///
 /// Order matters: the first adapter whose [`Source::matches`] returns true wins.
 pub fn registry() -> Vec<Box<dyn Source>> {
-    vec![Box::new(Narou)]
+    vec![Box::new(Narou), Box::new(Kakuyomu)]
 }
 
 /// Find the adapter responsible for a URL.
@@ -80,13 +95,18 @@ mod tests {
     #[test]
     fn registry_routes_japanese_novel_sites() {
         let sources = registry();
-        for raw in [
-            "https://ncode.syosetu.com/n1234ab/",
-            "https://novel18.syosetu.com/n8309id/",
+        for (raw, id) in [
+            ("https://ncode.syosetu.com/n1234ab/", "narou"),
+            ("https://novel18.syosetu.com/n8309id/", "narou"),
+            ("https://kakuyomu.jp/works/16816452221336015212", "kakuyomu"),
+            (
+                "https://kakuyomu.jp/works/16816452221336015212/episodes/16816452221336047787",
+                "kakuyomu",
+            ),
         ] {
             let url = Url::parse(raw).unwrap();
             let found = find(&sources, &url).expect("adapter should handle this URL");
-            assert_eq!(found.id(), "narou");
+            assert_eq!(found.id(), id, "input: {raw}");
         }
     }
 

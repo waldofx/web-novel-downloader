@@ -1,4 +1,4 @@
-//! Inline content: ruby, emphasis, links, and Narou's plain-text notation.
+//! Narou's plain-text notation, decoded on top of the shared inline walk.
 //!
 //! Narou writes furigana in *plain text* as well as in HTML:
 //!
@@ -9,130 +9,18 @@
 //! These characters are markup, not punctuation, so they are decoded here. A
 //! `｜` or `《` with no usable base stays literal text: showing a stray mark is
 //! better than dropping a character the author typed.
+//!
+//! The HTML around the text — `<ruby>`, `<strong>`, `<em>`, `<a>` — is the same
+//! as everywhere else and is handled by [`crate::inline`].
 
-use scraper::{ElementRef, Node};
+use crate::inline::{self, TextDecoder};
+use scraper::ElementRef;
 use wnd_core::Inline;
 
-/// The inline content of one element.
+/// The inline content of one element, decoding Narou's notation too.
 pub(super) fn inlines_of(element: &ElementRef) -> Vec<Inline> {
-    let mut builder = InlineBuilder::default();
-    walk_children(element, &mut builder);
-    builder.finish()
-}
-
-/// Collects inline nodes, decoding notation in each run of text between elements.
-#[derive(Default)]
-struct InlineBuilder {
-    nodes: Vec<Inline>,
-    pending: String,
-}
-
-impl InlineBuilder {
-    fn push_text(&mut self, text: &str) {
-        self.pending.push_str(text);
-    }
-
-    fn push_inline(&mut self, node: Inline) {
-        self.flush();
-        self.nodes.push(node);
-    }
-
-    fn finish(mut self) -> Vec<Inline> {
-        self.flush();
-        normalize(self.nodes)
-    }
-
-    fn flush(&mut self) {
-        if !self.pending.is_empty() {
-            let text = std::mem::take(&mut self.pending);
-            self.nodes.extend(parse_notation(&text));
-        }
-    }
-}
-
-/// Walk the child nodes of an element, because text and markup are siblings.
-fn walk_children(element: &ElementRef, builder: &mut InlineBuilder) {
-    let mut child = element.first_child();
-    while let Some(node) = child {
-        // Advance the cursor before using `node`; the nodes are reference counted.
-        child = node.next_sibling();
-        match node.value() {
-            Node::Text(text) => builder.push_text(text),
-            Node::Element(el) if el.name() == "br" => builder.push_text("\n"),
-            Node::Element(el) if el.name() == "ruby" => {
-                if let Some(element) = ElementRef::wrap(node) {
-                    builder.push_inline(ruby_of(&element));
-                }
-            }
-            Node::Element(el) => {
-                if let Some(element) = ElementRef::wrap(node) {
-                    match el.name() {
-                        "b" | "strong" => {
-                            let children = inlines_of(&element);
-                            builder.push_inline(Inline::Strong { children });
-                        }
-                        "em" | "i" => {
-                            let children = inlines_of(&element);
-                            builder.push_inline(Inline::Emphasis { children });
-                        }
-                        "a" => {
-                            let href = element.value().attr("href").unwrap_or("").to_string();
-                            let children = inlines_of(&element);
-                            builder.push_inline(Inline::Link { href, children });
-                        }
-                        // Inline images do not occur in Narou bodies; anything
-                        // else (span, u, s, font, …) is a transparent wrapper.
-                        "img" => {}
-                        _ => walk_children(&element, builder),
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-/// `<ruby>漢字<rt>かんじ</rt></ruby>` → [`Inline::Ruby`].
-fn ruby_of(element: &ElementRef) -> Inline {
-    let mut base = String::new();
-    let mut reading = String::new();
-    collect_ruby(element, RubyPart::Base, &mut base, &mut reading);
-    Inline::Ruby {
-        base: base.trim_ascii().to_string(),
-        reading: reading.trim_ascii().to_string(),
-    }
-}
-
-#[derive(Clone, Copy)]
-enum RubyPart {
-    Base,
-    Reading,
-    Ignore,
-}
-
-fn collect_ruby(element: &ElementRef, part: RubyPart, base: &mut String, reading: &mut String) {
-    let mut child = element.first_child();
-    while let Some(node) = child {
-        child = node.next_sibling();
-        match node.value() {
-            Node::Text(text) => match part {
-                RubyPart::Base => base.push_str(text),
-                RubyPart::Reading => reading.push_str(text),
-                RubyPart::Ignore => {}
-            },
-            Node::Element(el) => {
-                let part = match el.name() {
-                    "rt" => RubyPart::Reading,
-                    "rp" => RubyPart::Ignore,
-                    _ => part,
-                };
-                if let Some(element) = ElementRef::wrap(node) {
-                    collect_ruby(&element, part, base, reading);
-                }
-            }
-            _ => {}
-        }
-    }
+    let decode: TextDecoder = parse_notation;
+    inline::of(element, decode)
 }
 
 /// Decode Narou's plain-text ruby and emphasis notation into inline nodes.
@@ -183,7 +71,7 @@ fn parse_notation(text: &str) -> Vec<Inline> {
     }
 
     push_text(&mut nodes, &plain);
-    normalize(nodes)
+    inline::normalize(nodes)
 }
 
 /// First index at or after `from` holding `close`.
@@ -235,22 +123,6 @@ fn push_text(nodes: &mut Vec<Inline>, text: &str) {
             value: text.to_string(),
         });
     }
-}
-
-/// Merge adjacent text nodes and drop empty ones.
-fn normalize(nodes: Vec<Inline>) -> Vec<Inline> {
-    let mut out: Vec<Inline> = Vec::new();
-    for node in nodes {
-        match node {
-            Inline::Text { value } if value.is_empty() => {}
-            Inline::Text { value } => match out.last_mut() {
-                Some(Inline::Text { value: previous }) => previous.push_str(&value),
-                _ => out.push(Inline::Text { value }),
-            },
-            other => out.push(other),
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -325,16 +197,21 @@ mod tests {
         assert_eq!(parse_notation("《開き》なし"), vec![text("《開き》なし")]);
     }
 
+    /// The HTML walk is shared, but these two tests go through *this* adapter's
+    /// entry point, so they fail if Narou ever stops decoding its own notation.
+    fn chapter_text(html: &str) -> Vec<Inline> {
+        let document = Html::parse_document(&format!(
+            r#"<!DOCTYPE html><html><body><div id="f">{html}</div></body></html>"#
+        ));
+        let selector = Selector::parse("#f").expect("selector");
+        let element = document.select(&selector).next().expect("wrapper");
+        inlines_of(&element)
+    }
+
     #[test]
     fn html_markup_becomes_inline_nodes() {
-        let document = Html::parse_document(
-            r#"<html><body><p>a<em>e</em><a href="/x">l</a><span>s</span><img src="i.png" />b</p></body></html>"#,
-        );
-        let selector = Selector::parse("p").expect("selector");
-        let paragraph = document.select(&selector).next().expect("p");
-
         assert_eq!(
-            inlines_of(&paragraph),
+            chapter_text(r#"a<em>e</em><a href="/x">l</a><span>s</span><img src="i.png" />b"#),
             vec![
                 text("a"),
                 Inline::Emphasis {
@@ -353,14 +230,8 @@ mod tests {
 
     #[test]
     fn html_ruby_is_read_from_rt() {
-        let document = Html::parse_document(
-            r#"<html><body><p>　<ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>だ。</p></body></html>"#,
-        );
-        let selector = Selector::parse("p").expect("selector");
-        let paragraph = document.select(&selector).next().expect("p");
-
         assert_eq!(
-            inlines_of(&paragraph),
+            chapter_text("　<ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>だ。"),
             vec![
                 text("　"),
                 Inline::Ruby {
@@ -370,6 +241,27 @@ mod tests {
                 text("だ。"),
             ],
             "rp fallbacks are ignored so they do not leak into the text"
+        );
+    }
+
+    #[test]
+    fn notation_inside_html_ruby_is_still_decoded_around_it() {
+        // Narou has chapters that mix both encodings in one line.
+        assert_eq!(
+            chapter_text("　今日は<ruby>漢字<rt>かんじ</rt></ruby>と｜単語《たんご》です。"),
+            vec![
+                text("　今日は"),
+                Inline::Ruby {
+                    base: "漢字".into(),
+                    reading: "かんじ".into()
+                },
+                text("と"),
+                Inline::Ruby {
+                    base: "単語".into(),
+                    reading: "たんご".into()
+                },
+                text("です。"),
+            ]
         );
     }
 }
