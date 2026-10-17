@@ -39,11 +39,18 @@ pub struct ChapterMeta {
     pub index: u32,
     pub title: String,
     pub url: String,
+    /// Arc (章) the chapter belongs to, when the site groups chapters into arcs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc: Option<String>,
     /// RFC 3339, when the site exposes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub published_at: Option<String>,
     /// Hash of the chapter's canonical JSON, used to detect changes cheaply.
-    pub hash: String,
+    ///
+    /// `None` until the chapter has been fetched and written at least once;
+    /// an adapter that only lists a chapter cannot know it yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
     /// Path to the chapter file, relative to the novel directory.
     pub file: String,
 }
@@ -289,6 +296,32 @@ mod tests {
         let json = serde_json::to_string(&chapter).unwrap();
         let back: Chapter = serde_json::from_str(&json).unwrap();
         assert_eq!(chapter, back);
+    }
+
+    #[test]
+    fn chapter_meta_omits_absent_arc_and_hash() {
+        let meta = ChapterMeta {
+            index: 1,
+            title: "第一章".into(),
+            url: "https://ncode.syosetu.com/n1234ab/1/".into(),
+            arc: None,
+            published_at: None,
+            hash: None,
+            file: "chapters/0001.json".into(),
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(!json.contains("arc"), "absent arc must be omitted: {json}");
+        assert!(!json.contains("hash"), "unset hash must be omitted: {json}");
+        assert!(json.contains(r#""file":"chapters/0001.json""#));
+
+        let back: ChapterMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, meta);
+
+        // A pre-existing manifest without the newer fields still parses.
+        let legacy = r#"{"index":2,"title":"二","url":"u","published_at":"2020-01-01T00:00:00+09:00","hash":"sha256:x","file":"chapters/0002.json"}"#;
+        let parsed: ChapterMeta = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed.arc, None);
+        assert_eq!(parsed.hash.as_deref(), Some("sha256:x"));
     }
 
     #[test]

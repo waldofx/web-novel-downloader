@@ -9,3 +9,4 @@ description = "Site adapters for web-novel-downloader"
 wnd-core.workspace = true
 thiserror.workspace = true
 url.workspace = true
+scraper.workspace = true
