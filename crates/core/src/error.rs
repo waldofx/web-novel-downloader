@@ -18,6 +18,13 @@ pub enum Error {
     #[error("format version {found} is newer than this build reads ({expected}); update the tool")]
     FormatVersion { found: u32, expected: u32 },
 
+    /// A line of a cookie file that is not the Netscape `cookies.txt` format.
+    ///
+    /// Only the line number and the reason: a malformed line still holds a
+    /// credential, and an error message ends up in terminals, logs and issues.
+    #[error("not a Netscape cookies.txt: line {line}: {reason}")]
+    CookieFile { line: usize, reason: String },
+
     #[error("chapter {0} not found")]
     ChapterNotFound(u32),
 

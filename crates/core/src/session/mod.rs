@@ -19,3 +19,4 @@
 //! written to a log, an error, `list` output, or `Debug`.
 
 pub mod cookie;
+pub mod netscape;
