@@ -1,6 +1,6 @@
 //! Reading and writing a novel directory.
 //!
-//! Layout (see `DESIGN.md`):
+//! Layout (see `docs/engineering/format.md`):
 //!
 //! ```text
 //! my-novel/
