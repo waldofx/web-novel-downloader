@@ -5,7 +5,9 @@
 //! - **Progress goes to stderr, results to stdout.** `nvd download … >
 //!   summary.txt` captures the summary rather than the meter.
 //! - **Exit codes are meaningful**: `0` on success, `1` on any failure, and `2`
-//!   for a usage error (which is clap's own convention).
+//!   for a usage error (which is clap's own convention). `nvd update` adds `3`
+//!   for "there was nothing to do", so a scheduled run can tell that apart from
+//!   a failure without reading anything.
 //!
 //! Errors are written as a sentence that names the thing that failed — the URL
 //! that was being fetched, or the directory being read — because "error:
@@ -17,7 +19,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 use url::Url;
 use wnd_core::{FetchPolicy, HttpClient, NovelDir};
-use wnd_download::{DownloadOptions, Progress};
+use wnd_download::{DownloadOptions, Progress, UpdateOptions, UpdateSummary};
 use wnd_export::{ExportOptions, ExportSummary, Format};
 
 #[derive(Debug, Parser)]
@@ -60,12 +62,27 @@ enum Command {
     },
 
     /// Fetch only new or changed chapters of an already-downloaded novel
+    ///
+    /// The novel comes from the directory's own manifest, so no URL is needed.
+    /// A chapter that is new, or that the site says was revised, is fetched;
+    /// one that disappeared from the index is reported and left on disk; the
+    /// rest are left alone.
+    ///
+    /// Exits 3 when there was nothing to do, so a scheduled run can tell
+    /// "nothing new" apart from "it broke" (1) without reading the output. Exit
+    /// 0 means something was fetched, or a chapter had gone from the index.
     Update {
         /// Directory previously written by `nvd download`
         dir: PathBuf,
-        /// Allow adult works
+        /// Allow adult works. An adult directory is refused before anything is
+        /// requested, because the rating is already recorded in its manifest
         #[arg(long)]
         allow_adult: bool,
+        /// Fetch every chapter and compare it, rewriting only the ones that
+        /// really differ. Costs one request per chapter, and is the only way to
+        /// find an edit on a site that publishes no revision (Kakuyomu)
+        #[arg(long)]
+        check: bool,
     },
 
     /// Export a downloaded novel (EPUB, TXT, or Markdown)
@@ -107,7 +124,7 @@ impl From<FormatArg> for Format {
 
 fn main() -> ExitCode {
     match run(Cli::parse()) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => ExitCode::from(code),
         Err(message) => {
             eprintln!("error: {message}");
             ExitCode::FAILURE
@@ -115,9 +132,16 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli) -> Result<(), String> {
+/// Nothing went wrong, and the run did what it was asked.
+const EXIT_OK: u8 = 0;
+/// `nvd update` found nothing new or changed. Distinct from `0` so a scheduled
+/// run can tell "nothing to do" from "something happened" without parsing, and
+/// from `1` so it can tell both from a failure.
+const EXIT_NOTHING_UPDATED: u8 = 3;
+
+fn run(cli: Cli) -> Result<u8, String> {
     match cli.command {
-        Command::Info { dir } => info(&dir),
+        Command::Info { dir } => info(&dir).map(|()| EXIT_OK),
 
         Command::Download {
             url,
@@ -135,20 +159,16 @@ fn run(cli: Cli) -> Result<(), String> {
             max_chapters,
             force,
             no_robots,
-        ),
+        )
+        .map(|()| EXIT_OK),
 
-        Command::Export { dir, format } => export(&dir, &format),
+        Command::Export { dir, format } => export(&dir, &format).map(|()| EXIT_OK),
 
         Command::Update {
             dir,
-            allow_adult: _,
-        } => {
-            let dir = NovelDir::at(dir);
-            // Reading the manifest is real: it proves the directory is valid, so
-            // the answer for a typo is not "not implemented".
-            dir.read_manifest().map_err(|error| named(&dir, &error))?;
-            Err("update is not implemented yet (milestone M6)".to_string())
-        }
+            allow_adult,
+            check,
+        } => update(&dir, allow_adult, check),
     }
 }
 
@@ -208,6 +228,60 @@ fn download(
     }
 
     Ok(())
+}
+
+fn update(dir: &Path, allow_adult: bool, check: bool) -> Result<u8, String> {
+    let client = HttpClient::new(FetchPolicy::default())
+        .map_err(|error| format!("could not build the HTTP client: {error}"))?;
+    let options = UpdateOptions { allow_adult, check };
+
+    let mut reporter = Reporter::default();
+    let summary = wnd_download::update(&wnd_sources::registry(), &client, dir, &options, |event| {
+        reporter.report(&event)
+    })
+    // Name the directory: an update is a thing done to a directory, and "which
+    // one" is the question a failure leaves open.
+    .map_err(|error| format!("could not update {}: {error}", dir.display()))?;
+
+    println!("{}", summary.title);
+    if summary.up_to_date() {
+        println!(
+            "  up to date: {} chapters, nothing new or changed",
+            summary.chapters_total
+        );
+    } else {
+        println!(
+            "  chapters: {} fetched, {} skipped, {} total",
+            summary.chapters_fetched, summary.chapters_skipped, summary.chapters_total
+        );
+    }
+    if summary.chapters_checked > 0 {
+        println!(
+            "  checked:  {} compared, {} changed",
+            summary.chapters_checked, summary.chapters_fetched
+        );
+    }
+    println!("  written:  {}", human_bytes(summary.bytes_written));
+    for gone in &summary.removed {
+        // Said out loud, and never acted on: deleting a file the user already has
+        // is not this tool's business.
+        println!(
+            "  gone:     {} (chapter {} is no longer in the index; nothing was deleted)",
+            gone.title, gone.index
+        );
+    }
+    println!("  output:   {}", summary.output_dir.display());
+
+    Ok(update_exit_code(&summary))
+}
+
+/// The exit code an update's outcome deserves.
+fn update_exit_code(summary: &UpdateSummary) -> u8 {
+    if summary.up_to_date() {
+        EXIT_NOTHING_UPDATED
+    } else {
+        EXIT_OK
+    }
 }
 
 fn export(dir: &Path, formats: &[FormatArg]) -> Result<(), String> {
@@ -310,6 +384,11 @@ impl Reporter {
                 self.seen += 1;
                 eprintln!("  {} skip   {title}", self.counter());
             }
+            Progress::Checked { title, .. } => {
+                // Fetched and compared, and nothing was written: `update --check`.
+                self.seen += 1;
+                eprintln!("  {} check  {title}", self.counter());
+            }
         }
     }
 
@@ -348,6 +427,41 @@ mod tests {
         assert_eq!(human_bytes(1024), "1.0 KiB");
         assert_eq!(human_bytes(1536), "1.5 KiB");
         assert_eq!(human_bytes(5 * 1024 * 1024), "5.0 MiB");
+    }
+
+    #[test]
+    fn an_update_that_found_nothing_exits_three() {
+        // A scheduled run must be able to tell "nothing new" from "it broke"
+        // (1), and both from "something happened" (0).
+        let nothing = UpdateSummary {
+            title: "小説".to_string(),
+            chapters_total: 3,
+            chapters_fetched: 0,
+            chapters_skipped: 3,
+            chapters_checked: 0,
+            removed: Vec::new(),
+            bytes_written: 0,
+            output_dir: PathBuf::from("novel"),
+        };
+        assert_eq!(update_exit_code(&nothing), 3);
+
+        let fetched = UpdateSummary {
+            chapters_fetched: 1,
+            chapters_skipped: 2,
+            ..nothing.clone()
+        };
+        assert_eq!(update_exit_code(&fetched), 0);
+
+        // A chapter that vanished from the index is news too, even though
+        // nothing needed fetching: the run is not "up to date".
+        let gone = UpdateSummary {
+            removed: vec![wnd_download::RemovedChapter {
+                index: 4,
+                title: "第四章".to_string(),
+            }],
+            ..nothing.clone()
+        };
+        assert_eq!(update_exit_code(&gone), 0);
     }
 
     #[test]
