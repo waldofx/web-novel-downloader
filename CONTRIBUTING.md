@@ -37,8 +37,25 @@ Adding a source adapter adds its site name to this list.
 
 ### Branches
 
-Currently commits go directly to `main`. The planned shape is one branch per
-issue (`issue/<nnn>-<short-slug>`) merged by PR; see #6.
+The repository default branch is `development`.
+
+| Branch | Meaning |
+| --- | --- |
+| `main` | **Released.** Moves only by a `development` -> `main` PR. Protected: PR required, no direct pushes, no force pushes. |
+| `development` | **Integration.** All work lands here. |
+| `issue-<nnn>` | One per issue, branched from `development` and merged back into `development` by PR. |
+
+```bash
+git switch development && git pull
+git switch -c issue-12
+# ... work, commit with "#12 [feat](scope): ..." ...
+git push -u origin issue-12
+gh pr create --base development --fill
+```
+
+Never branch from `main`, and never open an issue PR against `main`. Issues
+close automatically when their PR merges into `development` (the default
+branch); `main` only receives work that is already finished and tested.
 
 ## Building and testing
 
