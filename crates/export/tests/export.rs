@@ -28,6 +28,7 @@ fn meta(index: u32, title: &str, arc: Option<&str>) -> ChapterMeta {
         url: format!("{NOVEL_URL}{index}/"),
         arc: arc.map(str::to_string),
         published_at: None,
+        revised_at: None,
         hash: None,
         file: format!("chapters/{}", chapter_file_name(index)),
     }

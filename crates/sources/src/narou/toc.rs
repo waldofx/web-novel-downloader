@@ -6,13 +6,16 @@
 //! arc a chapter belongs to" simply *the heading seen most recently*. Pagination
 //! carries that arc across pages along with the running chapter index.
 //!
-//! The published date is the row's own text. A *revision* date lives in a
-//! `title` attribute on a child `<span>` and is deliberately not used: it is a
-//! different fact, and taking it would rewrite history on every edit.
+//! The published date is the row's own text. A *revision* time lives in a `title`
+//! attribute on a child `<span>` and is stored separately, as `revised_at`:
+//! taking it for the publication date would rewrite history on every edit, and
+//! discarding it would leave `nvd update` unable to tell a revised chapter from
+//! an untouched one.
 
 use super::chapter_file;
 use super::{
-    SEL_ANCHOR, SEL_AUTHOR, SEL_PAGER_NEXT, SEL_SUMMARY, SEL_TITLE, SEL_TOC_ENTRY, SEL_UPDATE,
+    SEL_ANCHOR, SEL_AUTHOR, SEL_PAGER_NEXT, SEL_REVISION, SEL_SUMMARY, SEL_TITLE, SEL_TOC_ENTRY,
+    SEL_UPDATE,
 };
 use crate::dom::{element_text, first_text, is_class};
 use scraper::{ElementRef, Html};
@@ -73,13 +76,17 @@ pub(super) fn parse_toc_page(
                 base.join(&format!("{index}/"))
                     .expect("a relative join cannot fail")
             });
-        // The published date is the row's own text; a revision date lives in a
-        // `title` attribute and is deliberately not used.
-        let published_at = entry
+        // The published date is the row's own text; the revision time is a
+        // `title` attribute on a child of the same cell, and is read as a date
+        // or not at all.
+        let update_cell = entry
             .parent()
             .and_then(ElementRef::wrap)
-            .and_then(|row| row.select(&SEL_UPDATE).next())
-            .and_then(|cell| parse_datetime(&element_text(&cell)));
+            .and_then(|row| row.select(&SEL_UPDATE).next());
+        let published_at = update_cell
+            .as_ref()
+            .and_then(|cell| parse_datetime(&element_text(cell)));
+        let revised_at = update_cell.as_ref().and_then(revision_of);
 
         page.entries.push(ChapterMeta {
             index,
@@ -87,6 +94,7 @@ pub(super) fn parse_toc_page(
             url: url.to_string(),
             arc: arc.clone(),
             published_at,
+            revised_at,
             hash: None,
             file: chapter_file(index),
         });
@@ -96,6 +104,18 @@ pub(super) fn parse_toc_page(
     page.end_index = index;
     page.next_page = pager_next(&document, base);
     page
+}
+
+/// The revision time a revised chapter's row carries, if any.
+///
+/// Narou states it in a `title` attribute on a child of the update cell —
+/// `<span title="2023/09/01 14:36 改稿">` — while the cell's own text is the
+/// publication date. The attribute is read as a date or not at all; no word of
+/// the site's wording for "revised" appears in this file.
+fn revision_of(cell: &ElementRef) -> Option<String> {
+    cell.select(&SEL_REVISION)
+        .filter_map(|element| element.value().attr("title"))
+        .find_map(parse_datetime)
 }
 
 /// `作者：ウスバー（正直者）` → `ウスバー（正直者）`.
@@ -247,6 +267,53 @@ mod tests {
         // The next page must continue numbering and keep the arc in effect.
         assert_eq!(page.end_index, 3);
         assert_eq!(page.end_arc.as_deref(), Some("第二章　再会"));
+    }
+
+    #[test]
+    fn a_revised_chapter_records_the_time_it_was_revised() {
+        let page = parse_toc_page(
+            NAROU_TOC,
+            &url("https://ncode.syosetu.com/n0608gd/"),
+            None,
+            0,
+        );
+
+        // The fixture's first row is one the site marked as revised, and the
+        // revision time is in a `title` attribute on a child of the update cell.
+        // The other two were never revised and carry no such attribute.
+        assert_eq!(
+            page.entries[0].revised_at.as_deref(),
+            Some("2023-09-01T14:36:00+09:00")
+        );
+        assert_eq!(page.entries[1].revised_at, None);
+        assert_eq!(page.entries[2].revised_at, None);
+
+        // The revision does not rewrite when the chapter was published.
+        assert_eq!(
+            page.entries[0].published_at.as_deref(),
+            Some("2020-04-01T23:23:00+09:00")
+        );
+    }
+
+    #[test]
+    fn a_title_attribute_that_is_not_a_date_is_not_a_revision_time() {
+        // The attribute is read as a date or not at all. Nothing matches the
+        // site's wording for "revised" — the same rule the fetch layer follows
+        // for a block page it does not recognise.
+        let html = r#"<html><body><div class="p-eplist">
+          <div class="p-eplist__sublist">
+            <a href="/n0608gd/1/" class="p-eplist__subtitle">一</a>
+            <div class="p-eplist__update"> 2020/04/01 23:23 <span title="改稿しました">（改）</span> </div>
+          </div>
+        </div></body></html>"#;
+        let page = parse_toc_page(html, &url("https://ncode.syosetu.com/n0608gd/"), None, 0);
+
+        assert_eq!(page.entries.len(), 1);
+        assert_eq!(page.entries[0].revised_at, None);
+        assert_eq!(
+            page.entries[0].published_at.as_deref(),
+            Some("2020-04-01T23:23:00+09:00")
+        );
     }
 
     #[test]

@@ -46,6 +46,18 @@ pub struct ChapterMeta {
     /// RFC 3339, when the site exposes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub published_at: Option<String>,
+    /// RFC 3339, when the site says the chapter was last **revised**.
+    ///
+    /// A different fact from `published_at`, which stays the publication time: a
+    /// revision does not rewrite when the chapter appeared. Narou publishes this
+    /// for the chapters it has revised and for no others; a site that publishes
+    /// no revisions (Kakuyomu, checked against the live site) leaves it `None`.
+    ///
+    /// `nvd update` fetches a chapter when this differs from the index's — in
+    /// either direction, because a stamp that disappears means "cannot tell",
+    /// which is not "unchanged".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revised_at: Option<String>,
     /// Hash of the chapter's canonical JSON, used to detect changes cheaply.
     ///
     /// `None` until the chapter has been fetched and written at least once;
@@ -300,6 +312,45 @@ mod tests {
     }
 
     #[test]
+    fn a_revision_stamp_is_kept_apart_from_the_publication_date() {
+        // Narou lists a revised chapter's revision time in the index. It is a
+        // different fact from when the chapter was published, and an update run
+        // compares it to decide whether the author changed anything — so it is
+        // stored on its own rather than overwriting `published_at`.
+        let meta = ChapterMeta {
+            index: 1,
+            title: "第一章".into(),
+            url: "https://ncode.syosetu.com/n1234ab/1/".into(),
+            arc: None,
+            published_at: Some("2020-04-01T23:23:00+09:00".into()),
+            revised_at: Some("2023-09-01T14:36:00+09:00".into()),
+            hash: None,
+            file: "chapters/0001.json".into(),
+        };
+
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(
+            json.contains(r#""revised_at":"2023-09-01T14:36:00+09:00""#),
+            "the revision time must be stored: {json}"
+        );
+        assert_eq!(serde_json::from_str::<ChapterMeta>(&json).unwrap(), meta);
+
+        // Never revised, or a site that does not publish revisions: nothing is
+        // said, and the publication date is left alone.
+        let mut unrevised = meta.clone();
+        unrevised.revised_at = None;
+        let json = serde_json::to_string(&unrevised).unwrap();
+        assert!(!json.contains("revised_at"), "absent means absent: {json}");
+        assert_eq!(
+            serde_json::from_str::<ChapterMeta>(&json)
+                .unwrap()
+                .published_at
+                .as_deref(),
+            Some("2020-04-01T23:23:00+09:00")
+        );
+    }
+
+    #[test]
     fn chapter_meta_omits_absent_arc_and_hash() {
         let meta = ChapterMeta {
             index: 1,
@@ -307,11 +358,16 @@ mod tests {
             url: "https://ncode.syosetu.com/n1234ab/1/".into(),
             arc: None,
             published_at: None,
+            revised_at: None,
             hash: None,
             file: "chapters/0001.json".into(),
         };
         let json = serde_json::to_string(&meta).unwrap();
         assert!(!json.contains("arc"), "absent arc must be omitted: {json}");
+        assert!(
+            !json.contains("revised_at"),
+            "an unabridged manifest is not cluttered with absent facts: {json}"
+        );
         assert!(!json.contains("hash"), "unset hash must be omitted: {json}");
         assert!(json.contains(r#""file":"chapters/0001.json""#));
 
@@ -322,6 +378,7 @@ mod tests {
         let legacy = r#"{"index":2,"title":"二","url":"u","published_at":"2020-01-01T00:00:00+09:00","hash":"sha256:x","file":"chapters/0002.json"}"#;
         let parsed: ChapterMeta = serde_json::from_str(legacy).unwrap();
         assert_eq!(parsed.arc, None);
+        assert_eq!(parsed.revised_at, None);
         assert_eq!(parsed.hash.as_deref(), Some("sha256:x"));
     }
 

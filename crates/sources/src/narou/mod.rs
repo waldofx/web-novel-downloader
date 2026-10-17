@@ -57,6 +57,7 @@ selector!(
     ".p-eplist__chapter-title, .p-eplist__subtitle"
 );
 selector!(SEL_UPDATE, ".p-eplist__update");
+selector!(SEL_REVISION, ".p-eplist__update span[title]");
 selector!(SEL_PAGER_NEXT, ".c-pager__item--next");
 selector!(SEL_TEXT_BLOCK, "div.p-novel__text");
 selector!(SEL_PARAGRAPH, "p");
@@ -190,6 +191,7 @@ fn chapter_metas(rows: Vec<ChapterMeta>, title: &str, base: &Url) -> Vec<Chapter
         url: base.to_string(),
         arc: None,
         published_at: None,
+        revised_at: None,
         hash: None,
         file: chapter_file(1),
     }]
