@@ -164,6 +164,8 @@ pub(crate) fn not_the_site(page: &Page, expected: &str, intercepted: bool) -> Er
         url: page.url.clone(),
         kind: BlockKind::NotANovelPage,
         evidence: Unexpected::of(page).evidence(expected, intercepted),
+        session: None,
+        session_note: String::new(),
     }
 }
 

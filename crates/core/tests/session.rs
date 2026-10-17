@@ -12,8 +12,8 @@ use std::path::PathBuf;
 
 use common::temp_dir;
 use wnd_core::Error;
-use wnd_core::session::{Session, SessionStore};
 use wnd_core::session::cookie::Cookie;
+use wnd_core::session::{Session, SessionStore};
 
 /// A session named `name` holding one cookie for `pixiv.net`.
 fn session(name: &str, value: &str) -> Session {
@@ -65,7 +65,11 @@ fn saving_a_name_again_replaces_that_session() {
     store.save(&session("pixiv", "new")).expect("a refresh");
 
     let loaded = store.load("pixiv").expect("a load");
-    assert_eq!(loaded.cookies()[0].value, "new", "a refresh is the same gesture as a save");
+    assert_eq!(
+        loaded.cookies()[0].value,
+        "new",
+        "a refresh is the same gesture as a save"
+    );
     assert_eq!(store.list().expect("a listing").len(), 1);
 
     std::fs::remove_dir_all(&dir).ok();
@@ -78,7 +82,10 @@ fn the_listing_never_contains_a_cookie_value() {
 
     let listed = store.list().expect("a listing");
     let printed = format!("{listed:#?}");
-    assert!(printed.contains("pixiv.net"), "the host is not a secret: {printed}");
+    assert!(
+        printed.contains("pixiv.net"),
+        "the host is not a secret: {printed}"
+    );
     assert!(
         !printed.contains("hunter2"),
         "a listing is a summary and never a jar: {printed}"
@@ -114,7 +121,13 @@ fn the_earliest_expiry_is_the_one_a_listing_shows() {
         "the first cookie to expire is the one worth knowing about"
     );
 
-    let none = Session::from_cookies("none", vec![Cookie { expires_at: None, ..session("x", "v").cookies()[0].clone() }]);
+    let none = Session::from_cookies(
+        "none",
+        vec![Cookie {
+            expires_at: None,
+            ..session("x", "v").cookies()[0].clone()
+        }],
+    );
     assert_eq!(none.expires_at(), None, "no expiry at all is not the epoch");
 
     std::fs::remove_dir_all(&dir).ok();
@@ -125,8 +138,14 @@ fn a_session_is_only_offered_to_the_hosts_it_names() {
     let session = session("pixiv", "v");
 
     assert!(session.covers("pixiv.net"));
-    assert!(session.covers("www.pixiv.net"), "the site is not always at the apex");
-    assert!(!session.covers("i.pximg.net"), "another site's images are not pixiv");
+    assert!(
+        session.covers("www.pixiv.net"),
+        "the site is not always at the apex"
+    );
+    assert!(
+        !session.covers("i.pximg.net"),
+        "another site's images are not pixiv"
+    );
     assert!(!session.covers("example.com"));
 
     let nowhere = Session::new("empty", Vec::new(), session.cookies().to_vec());
@@ -168,7 +187,10 @@ fn a_name_that_could_escape_the_directory_is_refused() {
         store.save(&session(&long, "v")),
         Err(Error::InvalidSessionName { .. })
     ));
-    assert!(!outside.exists(), "nothing was written outside the directory");
+    assert!(
+        !outside.exists(),
+        "nothing was written outside the directory"
+    );
 
     // The characters that are allowed, including the ones a site names itself.
     store
@@ -225,7 +247,10 @@ fn a_session_never_prints_its_cookie_values() {
     let session = session("pixiv", "hunter2");
 
     let printed = format!("{session:?}");
-    assert!(printed.contains("pixiv"), "the name is not a secret: {printed}");
+    assert!(
+        printed.contains("pixiv"),
+        "the name is not a secret: {printed}"
+    );
     assert!(printed.contains("pixiv.net"), "nor is the host: {printed}");
     assert!(!printed.contains("hunter2"), "the jar is: {printed}");
     assert!(
@@ -242,7 +267,10 @@ fn the_session_file_is_readable_only_by_its_owner() {
     let (store, dir) = store("session-permissions");
     let path = store.save(&session("pixiv", "v")).expect("a save");
 
-    let mode = std::fs::metadata(&path).expect("metadata").permissions().mode();
+    let mode = std::fs::metadata(&path)
+        .expect("metadata")
+        .permissions()
+        .mode();
     assert_eq!(mode & 0o777, 0o600, "a credential is its owner's business");
 
     std::fs::remove_dir_all(&dir).ok();
