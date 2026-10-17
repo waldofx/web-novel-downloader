@@ -76,6 +76,7 @@ mod tests {
             url: format!("https://ncode.syosetu.com/n0608gd/{index}/"),
             arc: None,
             published_at: None,
+            revised_at: None,
             hash: None,
             file: crate::narou::chapter_file(index),
         }
@@ -206,6 +207,7 @@ mod tests {
             url: "https://ncode.syosetu.com/n5589cg/".to_string(),
             arc: None,
             published_at: None,
+            revised_at: None,
             hash: None,
             file: crate::narou::chapter_file(1),
         };

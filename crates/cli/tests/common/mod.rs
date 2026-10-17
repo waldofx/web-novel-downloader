@@ -102,6 +102,7 @@ pub fn novel(tag: &str) -> (TempDir, NovelDir) {
             url: format!("{URL}{index}/"),
             arc: None,
             published_at: None,
+            revised_at: None,
             hash: None,
             file: format!("chapters/{}", chapter_file_name(index)),
         })

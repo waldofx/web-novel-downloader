@@ -40,6 +40,7 @@ fn chapter_meta(url: &str) -> ChapterMeta {
         url: url.to_string(),
         arc: None,
         published_at: None,
+        revised_at: None,
         hash: None,
         file: "chapters/0001.json".to_string(),
     }

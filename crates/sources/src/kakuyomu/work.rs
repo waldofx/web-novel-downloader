@@ -156,6 +156,12 @@ fn chapters_of(apollo: &Apollo, work: &Work, base: &Url) -> Result<Vec<ChapterMe
                 url: format!("{base}/episodes/{}", episode.id),
                 arc: arc.clone(),
                 published_at: episode.published_at,
+                // Kakuyomu publishes no revision time, per chapter or at all:
+                // a live work page (2026-10-17) carries `{id, title,
+                // publishedAt}` for every episode and only a
+                // `lastEpisodePublishedAt` on the work. `nvd update --check`
+                // is what covers an edit there.
+                revised_at: None,
                 hash: None,
                 file: format!("chapters/{}", chapter_file_name(index)),
             });
