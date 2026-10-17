@@ -20,3 +20,6 @@
 
 pub mod cookie;
 pub mod netscape;
+pub mod store;
+
+pub use store::{Session, SessionStore, SessionSummary, default_dir, hosts_of};

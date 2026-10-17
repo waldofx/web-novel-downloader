@@ -25,6 +25,26 @@ pub enum Error {
     #[error("not a Netscape cookies.txt: line {line}: {reason}")]
     CookieFile { line: usize, reason: String },
 
+    /// A session name that cannot be a file name.
+    #[error("invalid session name `{name}`: {why}")]
+    InvalidSessionName { name: String, why: &'static str },
+
+    /// No session under that name. Never carries a cookie: only the name.
+    #[error("no session named `{0}`")]
+    SessionNotFound(String),
+
+    /// A file in the sessions directory that is not a session.
+    #[error("not a session file: {path}: {source}")]
+    SessionFile {
+        path: String,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    /// Neither a home nor a data directory could be found for the user.
+    #[error("no user data directory found: set {0}")]
+    NoDataDir(&'static str),
+
     #[error("chapter {0} not found")]
     ChapterNotFound(u32),
 

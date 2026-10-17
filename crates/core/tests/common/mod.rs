@@ -12,3 +12,15 @@ use wnd_core::{FetchPolicy, HttpClient};
 pub fn client() -> HttpClient {
     HttpClient::new(FetchPolicy::default()).expect("client")
 }
+
+/// A fresh directory under the system temporary directory.
+///
+/// Named with the process id and the clock so two test binaries never collide.
+/// It is the caller's to remove.
+pub fn temp_dir(tag: &str) -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    std::env::temp_dir().join(format!("wnd-{tag}-{}-{nanos}", std::process::id()))
+}
