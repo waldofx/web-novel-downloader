@@ -35,6 +35,7 @@ h1, h2, h3 { line-height: 1.4; }
 h2 { margin: 0 0 0.8em; }
 h3 { margin: 1.2em 0 0.6em; }
 p { margin: 0 0 0.4em; }
+p.arc { margin: 2em 0 0.8em; font-weight: bold; }
 aside.note { margin: 1.2em 0; padding: 0.6em 0.9em; border-left: 3px solid #bbb;\
  font-size: 0.9em; color: #444; }
 aside.note h3 { margin-top: 0; }
@@ -91,10 +92,19 @@ pub fn write(
         zip.write_all(&fs::read(dir.root().join(image))?)?;
     }
 
-    // 5. One document per chapter, in reading order.
+    // 5. One document per chapter, in reading order. The manifest is where the
+    // adapter recorded the arcs, so this is also where we know a chapter is the
+    // first of its arc — and therefore where the arc's divider belongs.
+    let mut arc: Option<&str> = None;
     for chapter in chapters {
+        let chapter_arc = manifest
+            .chapter(chapter.index)
+            .and_then(|meta| meta.arc.as_deref());
+        let divider = (chapter_arc != arc).then_some(chapter_arc).flatten();
+        arc = chapter_arc;
+
         zip.start_file(format!("OEBPS/{}", chapter_href(chapter.index)), deflated)?;
-        zip.write_all(chapter_document(manifest, chapter, options, &words).as_bytes())?;
+        zip.write_all(chapter_document(manifest, chapter, divider, options, &words).as_bytes())?;
     }
 
     // 6. The navigation document, and the package that ties it together.
@@ -191,14 +201,26 @@ fn document(title: &str, language: &str, stylesheet: &str, body: &str) -> String
 }
 
 /// The chapter's document. Images are one level up, in the archive's root.
+///
+/// `arc` is the divider to put above the chapter, already narrowed to the
+/// chapters that open an arc: an arc heading repeated on every chapter of the
+/// arc would be noise in a book, and a chapter document cannot know where it
+/// sits in the reading order by itself.
 fn chapter_document(
     manifest: &Manifest,
     chapter: &Chapter,
+    arc: Option<&str>,
     options: &ExportOptions,
     words: &Words,
 ) -> String {
     let mut body = String::new();
     body.push_str("<section epub:type=\"chapter\">\n");
+    if let Some(arc) = arc {
+        // A divider rather than a heading level: the structure a reader
+        // navigates by is the nested list in `nav.xhtml`, and TXT and Markdown
+        // treat an arc the same way.
+        let _ = writeln!(body, "<p class=\"arc\">{}</p>", xhtml::escape(arc));
+    }
     let _ = writeln!(body, "<h2>{}</h2>", xhtml::escape(&chapter.title));
 
     if options.include_notes && !chapter.pre_note.is_empty() {
@@ -228,12 +250,32 @@ fn chapter_document(
 }
 
 /// The navigation document, which is the table of contents a reader shows.
+///
+/// A chapter that belongs to an arc is nested inside it, which is how EPUB 3
+/// expresses a part: the arc is a list item with a `<span>` heading — there is
+/// no link to it, it is a divider, not a page — and its chapters are the nested
+/// list. A chapter in no arc stays a direct child, so a novel without arcs gets
+/// exactly the flat list it got before arcs existed.
 fn nav_document(manifest: &Manifest, chapters: &[Chapter], words: Words) -> String {
     let mut body = String::new();
     body.push_str("<nav epub:type=\"toc\" id=\"toc\">\n");
     let _ = writeln!(body, "<h1>{}</h1>", xhtml::escape(words.contents));
     body.push_str("<ol>\n");
+
+    let mut arc: Option<&str> = None;
     for chapter in chapters {
+        let chapter_arc = manifest
+            .chapter(chapter.index)
+            .and_then(|meta| meta.arc.as_deref());
+        if chapter_arc != arc {
+            if arc.is_some() {
+                body.push_str("</ol>\n</li>\n");
+            }
+            if let Some(name) = chapter_arc {
+                let _ = writeln!(body, "<li><span>{}</span>\n<ol>", xhtml::escape(name));
+            }
+            arc = chapter_arc;
+        }
         let _ = writeln!(
             body,
             "<li><a href=\"{}\">{}</a></li>",
@@ -241,6 +283,10 @@ fn nav_document(manifest: &Manifest, chapters: &[Chapter], words: Words) -> Stri
             xhtml::escape(&chapter.title)
         );
     }
+    if arc.is_some() {
+        body.push_str("</ol>\n</li>\n");
+    }
+
     body.push_str("</ol>\n</nav>\n");
     document(&manifest.title, &manifest.language, "style.css", &body)
 }
