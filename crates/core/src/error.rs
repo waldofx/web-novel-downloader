@@ -9,10 +9,13 @@ pub enum Error {
     #[error("invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
 
-    /// The on-disk format is a different version than this build understands.
+    /// The on-disk format is **newer** than this build understands.
     ///
-    /// The format is versioned so a future translation stage can rely on it.
-    #[error("unsupported format version {found}; this build expects {expected}")]
+    /// The format is versioned so a future translation stage can rely on it. It
+    /// is only bumped for an incompatible change, so an *older* file is read as
+    /// a matter of course — this error is one direction only: a file written by
+    /// a newer build, which may mean things this one does not.
+    #[error("format version {found} is newer than this build reads ({expected}); update the tool")]
     FormatVersion { found: u32, expected: u32 },
 
     #[error("chapter {0} not found")]

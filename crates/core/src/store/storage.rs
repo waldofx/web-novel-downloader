@@ -106,7 +106,12 @@ impl NovelDir {
             return Err(Error::ManifestNotFound(self.root.display().to_string()));
         }
         let manifest: Manifest = serde_json::from_str(&fs::read_to_string(&path)?)?;
-        if manifest.format_version != FORMAT_VERSION {
+        // A *newer* file was written by a build that knows something this one
+        // does not. An older one is readable by definition: the version only
+        // moves for an incompatible change, so every older shape is one this
+        // build still understands — and refusing it would strand directories
+        // that predate an unrelated addition to the format.
+        if manifest.format_version > FORMAT_VERSION {
             return Err(Error::FormatVersion {
                 found: manifest.format_version,
                 expected: FORMAT_VERSION,
@@ -126,7 +131,8 @@ impl NovelDir {
             return Err(Error::ChapterNotFound(index));
         }
         let chapter: Chapter = serde_json::from_str(&fs::read_to_string(&path)?)?;
-        if chapter.format_version != FORMAT_VERSION {
+        // Newer only: see `read_manifest`.
+        if chapter.format_version > FORMAT_VERSION {
             return Err(Error::FormatVersion {
                 found: chapter.format_version,
                 expected: FORMAT_VERSION,
@@ -231,6 +237,58 @@ mod tests {
         dir.write_manifest(&future).unwrap();
         assert!(matches!(
             dir.read_manifest(),
+            Err(Error::FormatVersion { .. })
+        ));
+
+        fs::remove_dir_all(dir.root()).ok();
+    }
+
+    #[test]
+    fn an_older_version_is_read_and_a_newer_one_is_refused() {
+        // The version is only ever bumped for an incompatible change, so an
+        // older file is readable by definition — refusing it would strand every
+        // directory already on disk, which is the opposite of what a reader is
+        // for. (`FORMAT_VERSION - 1` is not a real historical version while the
+        // format is still at its first; the test is written this way so that it
+        // becomes a real pair the moment the number moves.)
+        let dir = temp_novel("version");
+        dir.ensure_layout().unwrap();
+
+        let mut manifest = Manifest::new(
+            SourceInfo {
+                id: "narou".into(),
+                novel_url: "https://ncode.syosetu.com/n1234ab/".into(),
+                site_title: None,
+            },
+            "older",
+            "ja",
+        );
+        manifest.format_version = FORMAT_VERSION - 1;
+        dir.write_manifest(&manifest).unwrap();
+        assert_eq!(dir.read_manifest().unwrap().title, "older");
+
+        let mut chapter = Chapter::new(1, "第一章");
+        chapter.format_version = FORMAT_VERSION - 1;
+        dir.write_chapter(&chapter).unwrap();
+        assert_eq!(dir.read_chapter(1).unwrap().title, "第一章");
+
+        // Newer is another matter: that file was written by a build that knows
+        // something this one does not.
+        let mut newer = manifest.clone();
+        newer.format_version = FORMAT_VERSION + 1;
+        dir.write_manifest(&newer).unwrap();
+        let error = dir.read_manifest().unwrap_err();
+        assert!(matches!(error, Error::FormatVersion { .. }));
+        assert!(
+            error.to_string().contains("newer"),
+            "the message must say which way the mismatch goes: {error}"
+        );
+
+        let mut newer_chapter = chapter.clone();
+        newer_chapter.format_version = FORMAT_VERSION + 1;
+        dir.write_chapter(&newer_chapter).unwrap();
+        assert!(matches!(
+            dir.read_chapter(1),
             Err(Error::FormatVersion { .. })
         ));
 
