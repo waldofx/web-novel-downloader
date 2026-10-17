@@ -15,7 +15,8 @@ keeping the formatting that makes it readable:
 - **illustrations** come along too.
 
 It saves into a folder you own, and from there can produce an **EPUB** for an
-e-reader, plain **TXT**, or **Markdown**.
+e-reader, plain **TXT**, or **Markdown**. (The exporters work today; the command
+that runs them is still to come — see [getting started](getting-started.md).)
 
 ## Why not just use a browser extension?
 

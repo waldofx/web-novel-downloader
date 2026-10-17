@@ -46,6 +46,7 @@ A Cargo workspace, split so that each concern can be replaced independently.
 | `wnd-core` | `crates/core` | everything site-independent: the model (`store::model`), on-disk storage (`store::storage`), and the network layer (`net::fetch`, `net::policy`, `net::rate_limit`, `net::robots`) |
 | `wnd-sources` | `crates/sources` | one adapter per site or site family, plus the registry that picks one |
 | `wnd-download` | `crates/download` | orchestration: a novel URL in, a novel directory out |
+| `wnd-export` | `crates/export` | EPUB, TXT and Markdown, rendered from the chapters — see [export.md](export.md) |
 | `nvd` | `crates/cli` | the command-line front end |
 
 Planned later: `apps/gui` (Tauri) and `crates/translate`.
@@ -143,7 +144,7 @@ user's problem.
 | --- | --- | --- |
 | **M0** | repo, design docs, source roadmap | done |
 | **M1** | `core`: model, storage, fetch policy, rate limiter, robots | done |
-| **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | adapter and orchestrator done; export next, then CLI wiring |
+| **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | adapter, orchestrator and exports done; CLI wiring next |
 | **M3** | **Kakuyomu** adapter | — |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | — |
 | **M5** | **Pixiv** (cookie-based auth) | — |
@@ -157,5 +158,6 @@ user's problem.
 - Where do translations live — rewritten in place, or a sidecar
   (`0001.ja.json` + `0001.en.json`)? Leaning sidecar, so the original is never
   destroyed.
-- EPUB ruby fallback for readers that do not support `<ruby>`.
+- EPUB ruby fallback for readers that do not support `<ruby>`: `<rp>` is emitted,
+  but whether any target reader ignores it is untested against real devices.
 - Policy for *gaiji*: characters the site renders as images rather than Unicode.

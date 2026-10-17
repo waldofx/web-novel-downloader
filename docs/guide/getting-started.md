@@ -2,9 +2,9 @@
 
 ## Status (October 2026)
 
-**There is no working download command yet.** The engine is ready — the fetch
-layer, the Narou adapter, and the download orchestrator are implemented and
-tested — but the CLI that drives it and the exporters are still ahead. Progress
+**There is no working command yet.** The engine is ready — the fetch layer, the
+Narou adapter, the download orchestrator, and the EPUB/TXT/Markdown exporters are
+implemented and tested — but nothing wires them to the command line yet. Progress
 is tracked in the [roadmap](../engineering/architecture.md#roadmap).
 
 What works today:
@@ -14,7 +14,7 @@ What works today:
 | `nvd info <dir>` | works — reads a downloaded directory |
 | `nvd download <url> --out <dir>` | the engine works and is tested; the command is not wired up yet |
 | `nvd update <dir>` | not implemented yet |
-| `nvd export <dir> --format epub` | not implemented yet |
+| `nvd export <dir> --format epub` | the exporters work and are tested; the command is not wired up yet |
 
 ## Build it
 

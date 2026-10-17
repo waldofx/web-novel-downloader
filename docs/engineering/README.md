@@ -11,8 +11,11 @@ Read in this order the first time:
    invariants that must not be broken
 3. [fetch.md](fetch.md) — politeness, retries, caching, `robots.txt`
 4. [sources.md](sources.md) — the site roadmap, and how to add an adapter
-5. [testing.md](testing.md) — how tests are run, and which ones need the network
-6. [gotchas.md](gotchas.md) — **read this before debugging anything**
+5. [sources.md](sources.md) — the site roadmap, and how to add an adapter
+6. [export.md](export.md) — EPUB, TXT and Markdown, and why the output is
+   reproducible
+7. [testing.md](testing.md) — how tests are run, and which ones need the network
+8. [gotchas.md](gotchas.md) — **read this before debugging anything**
 
 ## The one rule
 

@@ -94,8 +94,9 @@ each one is cheaper to preserve than to rediscover.
 
 ### Ruby is first-class and parsed at fetch time
 
-Japanese web novels use furigana constantly. EPUB renders it natively
-(`<ruby>`/`<rt>`); TXT falls back to `漢字(かんじ)`.
+Japanese web novels use furigana constantly. The exporters render it natively
+(`<ruby>`/`<rt>`, with `<rp>` for readers that ignore ruby) or fall back to
+`漢字(かんじ)` where the format has no ruby — see [export.md](export.md#ruby-the-one-hard-case).
 
 Narou-family sites encode ruby **in plain text** — `｜漢字《かんじ》` — and use
 `《》` for emphasis. Left unparsed, that notation leaks into translation and gets

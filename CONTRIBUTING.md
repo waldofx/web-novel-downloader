@@ -115,6 +115,7 @@ cargo test -p wnd-sources --test narou_live -- --ignored --nocapture
 - `crates/core` — the site-independent model, storage, and network layer
 - `crates/sources` — per-site adapters, one folder each
 - `crates/download` — orchestration: resolve a URL, fetch what is missing, record hashes
+- `crates/export` — EPUB, TXT and Markdown, rendered from a downloaded directory
 - `crates/cli` — the `nvd` binary
 - `docs/guide` — user documentation
 - `docs/engineering` — architecture, format, fetch, sources, testing, gotchas
