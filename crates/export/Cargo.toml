@@ -1,0 +1,11 @@
+[package]
+name = "wnd-export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "EPUB, TXT, and Markdown exporters for web-novel-downloader"
+
+[dependencies]
+wnd-core.workspace = true
+thiserror.workspace = true
+zip.workspace = true
