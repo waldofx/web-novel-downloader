@@ -16,8 +16,8 @@ fixtures.local.json
 cookies.json
 **/cookies/*.json
 
-# OS files
-.DS_Store
+# Captured pages (personal, may contain adult content) — never commit
+captures/
 Thumbs.db
 
 # Editors
