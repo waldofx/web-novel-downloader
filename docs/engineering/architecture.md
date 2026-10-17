@@ -130,6 +130,26 @@ the saved HTML can be re-parsed offline, without re-downloading anything.
    one.** A failure mid-novel therefore leaves a valid, resumable directory: the
    chapters already fetched keep their hashes and are never fetched again.
 
+`nvd update` is that same sequence with a memory. It reads the novel's URL out of
+the directory's own manifest, re-reads the index, and diffs:
+
+```
+   manifest.json ──► stored chapter urls, hashes, revision stamps
+        │
+   Source::novel ──► the index as it stands now
+        │
+        ├─ new, or revised, or (--check) differing ──► fetch, write, re-hash
+        ├─ still listed and still hashing the same  ──► not requested
+        └─ gone from the index                      ──► reported, never deleted
+```
+
+Identity is compared by chapter **url**, not by number: Kakuyomu numbers episodes
+by position, so a chapter inserted in the middle moves every later number without
+any of them becoming a different chapter. The two properties worth remembering are
+that an update **never deletes** what the user already has, and that it refuses an
+adult directory *before* the index is read, because the rating is already in the
+manifest — the one check a first download cannot make that early.
+
 Resume compares recorded hashes rather than trusting a file to exist — existence
 alone would accept a truncated or hand-edited chapter. The rule is in
 [format.md](format.md#resume-and-update).
@@ -166,7 +186,7 @@ message shows the evidence instead of picking one. See
 | **M3** | **Kakuyomu** adapter | done — snapshot-based TOC (HTML alone lists one chapter of a thousand), real arcs, real `<ruby>` |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | — |
 | **M5** | **Pixiv** (cookie-based auth) | — |
-| **M6** | update tracking (fetch only new/changed chapters) | — |
+| **M6** | update tracking (fetch only new/changed chapters) | done — `nvd update` diffs the index against the recorded manifest; `--check` compares content where the site announces nothing |
 | **M7** | other sources (Royal Road, Scribble Hub, AO3, FFN, …) | — |
 | **M8** | CLI polish → Tauri GUI → translation stage | — |
 
