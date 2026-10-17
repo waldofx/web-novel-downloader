@@ -1,0 +1,12 @@
+[package]
+name = "wnd-download"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Download orchestration for web-novel-downloader"
+
+[dependencies]
+wnd-core.workspace = true
+wnd-sources.workspace = true
+thiserror.workspace = true
+url.workspace = true
