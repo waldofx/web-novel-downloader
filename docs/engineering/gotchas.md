@@ -15,6 +15,7 @@ version away from coming back, and the next person will search for the *symptom*
 | `something > out.txt` produces a UTF-16 file full of NUL bytes | PowerShell `>` redirects as UTF-16 | Use `Set-Content -Encoding utf8` or a write tool, then verify by reading the file |
 | `gh issue list --jq '.title'` errors, or the expression is split into separate arguments | `--jq` requires `--json`, and PowerShell splits arguments containing spaces | Put `--json <fields>` before `--jq`, or avoid spaces in the expression |
 | A branch was created literally named `issue-` | the command interpolated an empty variable (`$num` never matched) | Echo the extracted value before using it; derive numbers from real tool output |
+| A fixture written by a PowerShell helper has mojibake Japanese, or a BOM that `include_str!` then carries | the `.ps1` is read as ANSI, so non-ASCII literals in it are already mangled; and `Set-Content -Encoding UTF8` writes a BOM | Build non-ASCII from code points (`[char]0x3000`) or copy it out of the capture file; write with `[IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))`; check the first bytes afterwards |
 
 ## Git and GitHub workflow
 
@@ -34,6 +35,20 @@ version away from coming back, and the next person will search for the *symptom*
 | A short novel lists zero chapters, or its chapters 404 | a single-chapter novel renders its whole body inline on the table-of-contents page, and `/1/` does not exist | `chapter_metas()` synthesizes one chapter whose `url` is the TOC URL itself |
 | An adapter claims a lookalike domain such as `ncode.syosetu.com.evil.example` | substring matching instead of exact host matching | Compare the full lowercased `host_str()` against the known host list |
 | An `novel18` work is tagged as general audience | the rating is not in the page; it is a property of the host | `rating_for()` derives it from the host |
+
+## Kakuyomu markup
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| A 1069-episode novel downloads **seven** chapters, and nothing complains | the work page renders only the first chapter's episodes and lazy-loads the rest; the full list never reaches the HTML | Read the episode list from `__NEXT_DATA__` → `props.pageProps.__APOLLO_STATE__`. The live test asserts the count with a number in the message, so a regression fails loudly |
+| Counting episode links on a work page gives a number you cannot explain | the "1話目から読む" button carries the same `…/episodes/<id>` href as the first TOC row, and the TOC is lazily paginated | Do not count links. (Moot now that the list comes from the snapshot — kept because it is the symptom you will see if you try) |
+| Every scene break in every chapter silently disappeared | a blank line is `<p class="blank">` holding **one `<br>` per blank line**; reading the class as "one blank line" makes a scene break look like a paragraph separator | Count the `<br>`s inside the paragraph (`blank_lines` in `kakuyomu/chapter.rs`). One real chapter has 46 scene breaks that a naive reading finds none of |
+| A paragraph of a single U+3000 reaches the reader | a blank line whose content is an ideographic space, marked only by the class | Test blankness as *class `blank`* **or** empty text. `trim()` would eat U+3000, and the U+3000 is that paragraph's only content |
+| No tags, no author, or a cover that is obviously not the cover | none of the three is in the rendered HTML: tags and the author's name live only in the snapshot, and `og:image` is a *generated* share card | Read `tagLabels`, `author` → `UserAccount.activityName`, and `adminCoverImageUrl` from the snapshot. Do not fall back to `og:image`, and do not set `Manifest.cover` — that field is a path to a *fetched* image |
+| The chapter body contains the header, the share buttons, and an ad | the body container sits in the middle of a page full of chrome | Scope to `div.widget-episodeBody`; a page with no such container is `SourceError::Parse`, since an empty chapter would hide adapter rot |
+| An episode page has no `__NEXT_DATA__` at all, while the work page has one | only work pages carry a snapshot | The two pages need two idioms: the list from JSON, the body from HTML. An adapter that assumes one shape for the whole site gets one of them wrong |
+| A work with no arcs and a work with arcs need different code | they do not: an un-arc'd work has one unnamed group whose key is literally `TableOfContentsChapter:` — the empty id is the page's own shape | Resolve refs by exact key string, and treat a missing `chapter` field as "no arc". Requiring a non-empty id breaks every un-arc'd work |
+| A well-meaning change makes `published_at` read `…+09:00` like Narou's | Narou states a wall-clock time with no zone, Kakuyomu states a UTC instant; both are RFC 3339, which is all the model promises | Leave the instant as the site stated it. Converting means date arithmetic (leap years, month lengths) for a field nothing displays; a consumer that wants local time formats it |
 
 ## Rust layout and tests
 

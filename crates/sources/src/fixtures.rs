@@ -17,3 +17,20 @@ pub(crate) const NAROU_CHAPTER: &str = include_str!("../tests/fixtures/narou/cha
 /// A short story: no chapter rows at all, the whole body rendered inline on the
 /// table-of-contents page.
 pub(crate) const NAROU_SHORT_STORY: &str = include_str!("../tests/fixtures/narou/short-story.html");
+
+/// A Kakuyomu work page grouped into arcs (章): two chapters of two episodes
+/// each, the author behind a reference, a catchphrase and content flags the
+/// adapter deliberately ignores, and a cover the page does not have.
+pub(crate) const KAKUYOMU_WORK_ARCS: &str =
+    include_str!("../tests/fixtures/kakuyomu/work-arcs.html");
+
+/// A Kakuyomu work page with no arcs: one unnamed group whose snapshot key has
+/// an empty id (`TableOfContentsChapter:`).
+pub(crate) const KAKUYOMU_WORK_FLAT: &str =
+    include_str!("../tests/fixtures/kakuyomu/work-flat.html");
+
+/// A Kakuyomu episode page: the body container, one `<br>` per blank line, a
+/// blank line holding only an ideographic space, `<ruby>` with `<rb>`/`<rp>`,
+/// and — around the container — the header, share buttons and ad slot that must
+/// not be read as story text.
+pub(crate) const KAKUYOMU_CHAPTER: &str = include_str!("../tests/fixtures/kakuyomu/chapter.html");

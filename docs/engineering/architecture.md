@@ -59,8 +59,12 @@ A third crate, depending on both, has no cycle.
 **Why feature folders inside the crates.** A flat `src/` becomes a dumping
 ground once a crate has more than a handful of modules. Modules are grouped by
 feature (`core/src/net`, `core/src/store`), and a site adapter that outgrows one
-file becomes a folder of one job per file (`sources/src/narou/{toc,chapter,inline,dom}.rs`).
-The bar is a job, not a line count: `dom.rs` is small because it is one job.
+file becomes a folder of one job per file (`sources/src/narou/{toc,chapter,inline}.rs`,
+`sources/src/kakuyomu/{work,chapter,apollo}.rs`). The bar is a job, not a line
+count: `narou/dom.rs` was small because it was one job — and when the second
+adapter arrived it turned out to be a job *both* adapters have, so it moved up to
+`sources/src/{dom,blocks,inline,selectors}.rs` and the adapters were left with
+only what is peculiar to their site.
 
 **Why the commonly used types are re-exported at the crate root.** Consumers
 write `wnd_core::HttpClient`, not `wnd_core::net::fetch::HttpClient`. The
@@ -145,7 +149,7 @@ user's problem.
 | **M0** | repo, design docs, source roadmap | done |
 | **M1** | `core`: model, storage, fetch policy, rate limiter, robots | done |
 | **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | done — `nvd download` and `nvd export` work end to end |
-| **M3** | **Kakuyomu** adapter | — |
+| **M3** | **Kakuyomu** adapter | done — snapshot-based TOC (HTML alone lists one chapter of a thousand), real arcs, real `<ruby>` |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | — |
 | **M5** | **Pixiv** (cookie-based auth) | — |
 | **M6** | update tracking (fetch only new/changed chapters) | — |

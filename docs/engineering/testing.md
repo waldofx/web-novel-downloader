@@ -51,7 +51,8 @@ third party's server being reachable — or on it tolerating us.
 ```bash
 cargo test --workspace                                    # offline, always green
 cargo test -p wnd-core   --test net_live   -- --ignored --nocapture
-cargo test -p wnd-sources --test narou_live -- --ignored --nocapture
+cargo test -p wnd-sources --test narou_live    -- --ignored --nocapture
+cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
 ```
 
 Live tests print what they found (`--nocapture`) so that a failure shows the real
@@ -80,5 +81,8 @@ paste the output. "Should work" is not evidence.
 | the download sequence: resume, `--force`, `--max-chapters`, adult refusal, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
 | the exports: exact TXT and Markdown documents, EPUB structure, reproducibility | `crates/export/tests/export.rs` | a novel written to a temp directory; the EPUB is read back with `zip` |
 | Narou DOM helpers, notation, blank lines, TOC, dates | `sources/src/narou/*` | fixture files |
+| the shared DOM helpers, blank-line rule and inline walk | `sources/src/{dom,blocks,inline}.rs` | both adapters go through them, so they are covered by both adapters' tests as well as their own |
+| Kakuyomu's snapshot reader, arc grouping, blank-line counts, body scoping | `sources/src/kakuyomu/*` | fixture files, including a work whose HTML would lie about its size |
 | the whole pipeline under the real binary: exit codes, which stream output goes to, flags, `--help` | `crates/cli/tests/cli.rs` | runs `nvd` itself, so no library test can cover it. Offline, except one `#[ignore]`d test that downloads two chapters for real |
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |
+| Kakuyomu against the real site, including the 1069-episode work | `sources/tests/kakuyomu_live.rs` | `#[ignore]`d |

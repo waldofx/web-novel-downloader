@@ -34,6 +34,9 @@ The binary lands at `target/release/nvd` (`nvd.exe` on Windows).
 # fetch a whole novel into ./my-novel
 nvd download https://ncode.syosetu.com/n0608gd/ --out ./my-novel
 
+# Kakuyomu works too — any of its URLs, including the chapter you are reading
+nvd download https://kakuyomu.jp/works/16816452221336015212 --out ./my-novel
+
 # fetch it and produce a file for an e-reader in the same step
 nvd download https://ncode.syosetu.com/n0608gd/ --out ./my-novel --format epub,txt
 

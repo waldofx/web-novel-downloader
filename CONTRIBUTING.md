@@ -107,7 +107,8 @@ cargo fmt --all --check
 live tests and paste the output:
 
 ```bash
-cargo test -p wnd-sources --test narou_live -- --ignored --nocapture
+cargo test -p wnd-sources --test narou_live    -- --ignored --nocapture
+cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
 ```
 
 ## Repo layout

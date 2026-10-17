@@ -9,10 +9,10 @@ feed the EPUB / TXT / Markdown exporters.
 
 ## Status
 
-Early, and **working end to end for Narou**. `nvd download` fetches a novel and
-its chapters into a structured directory, `nvd export` turns one into EPUB, TXT or
-Markdown, and `nvd info` describes a directory you already have. `nvd update` is
-not implemented yet; other sources are next — see the
+Early, and **working end to end for Narou and Kakuyomu**. `nvd download` fetches a
+novel and its chapters into a structured directory, `nvd export` turns one into
+EPUB, TXT or Markdown, and `nvd info` describes a directory you already have.
+`nvd update` is not implemented yet; other sources are next — see the
 [roadmap](docs/engineering/architecture.md#roadmap).
 
 | | |

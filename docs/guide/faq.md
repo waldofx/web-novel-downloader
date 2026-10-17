@@ -20,10 +20,12 @@ Kept as data, attached to its base word. The EPUB renders it as real `<ruby>`;
 TXT and Markdown have to fall back to something like `漢字(かんじ)`, which you can
 turn down to just `漢字` if you prefer.
 
-### Can I download a novel that isn't Japanese?
+### Can I download a novel from somewhere other than Narou?
 
-Not yet. Narou comes first; Kakuyomu, Hameln and Pixiv are next, and English
-sites (Royal Road, Scribble Hub, AO3, FanFiction.net) are on the list.
+Yes — Narou (`ncode.syosetu.com` and its R18 sibling) and Kakuyomu
+(`kakuyomu.jp`). Hameln and Pixiv are next, and English sites (Royal Road,
+Scribble Hub, AO3, FanFiction.net) are on the list. Paste any URL from a work,
+including the page of the chapter you are reading.
 
 ### Can it fetch adult (R18) works?
 
