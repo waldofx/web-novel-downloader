@@ -37,6 +37,24 @@ pub enum Error {
     #[error("http {status} from {url}")]
     Http { status: u16, url: String },
 
+    /// The page that arrived was not the site.
+    ///
+    /// A network filter (`HTTP 200`, a block notice) or Cloudflare's browser
+    /// challenge (`HTTP 403`, `Just a moment...`) — see
+    /// [`net::blocked`](crate::net::blocked). Both are a fact about the network
+    /// or the site's bot policy, and neither is a parse failure, which is what
+    /// the adapter would have reported instead.
+    ///
+    /// The URL is a field rather than part of the message on purpose: callers
+    /// (the CLI) already name it, and the message reads worse for repeating it.
+    #[error("{kind} (HTTP {status}): {evidence}")]
+    Blocked {
+        status: u16,
+        url: String,
+        kind: crate::net::blocked::BlockKind,
+        evidence: String,
+    },
+
     /// A transport-level failure (timeout, DNS, reset) after retries.
     #[error("network error for {url}: {source}")]
     Network {

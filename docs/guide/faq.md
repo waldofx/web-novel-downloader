@@ -52,3 +52,28 @@ disk since it was written.
 
 They are kept, separately from the chapter body, so you can keep them, hide
 them, or translate them independently.
+
+### It says a filter page or a Cloudflare challenge answered. What now?
+
+Nothing was downloaded, and the message names what answered instead, with its
+HTTP status:
+
+- **an ISP content-filter page** (`HTTP 200`) — your network redirected the
+  request to a block notice, because a filter is in force for that domain. The
+  tool will not pretend the notice was a novel, and getting around the filter
+  (another network, a VPN) is your call rather than something it does for you.
+- **a Cloudflare challenge** (`HTTP 403`) — the site checks that its visitors
+  run JavaScript, and a downloader is not a browser. Sources behind such a check
+  need a session the tool does not have yet.
+
+Either way, re-running once the cause is gone is safe: chapters already on disk
+are verified by hash and skipped.
+
+### Why does a filtered site hang instead of saying so?
+
+Because the filter usually hijacks the *name*, not the connection. An `https://`
+request then lands on a box with no valid certificate and times out rather than
+answering, so you get a network error naming the URL and the timeout. The
+`http://` form of the same URL is where the block notice appears — and that is
+the one the tool recognises and reports. See
+[gotchas](../engineering/gotchas.md).

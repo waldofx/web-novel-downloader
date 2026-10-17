@@ -7,7 +7,9 @@
 //!   [`storage`](store::storage) on disk,
 //! - [`net`] — fetching politely: the [`policy`](net::policy), the
 //!   [`rate_limit`](net::rate_limit)r enforcing it, [`robots`](net::robots)
-//!   rules, and the [`fetch`](net::fetch) layer that applies them.
+//!   rules, the [`fetch`](net::fetch) layer that applies them, and
+//!   [`blocked`](net::blocked), which notices when the answer is a filter page
+//!   or a bot challenge rather than the site.
 //!
 //! The types consumers reach for most are re-exported at the crate root, so
 //! `wnd_core::Manifest` works as well as `wnd_core::store::model::Manifest`.
@@ -18,6 +20,7 @@ pub mod net;
 pub mod store;
 
 pub use error::{Error, Result};
+pub use net::blocked::BlockKind;
 pub use net::fetch::{HttpClient, RawCache};
 pub use net::policy::FetchPolicy;
 pub use net::rate_limit::RateLimiter;

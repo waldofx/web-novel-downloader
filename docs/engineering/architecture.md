@@ -43,7 +43,7 @@ A Cargo workspace, split so that each concern can be replaced independently.
 
 | Crate | Path | Responsibility |
 | --- | --- | --- |
-| `wnd-core` | `crates/core` | everything site-independent: the model (`store::model`), on-disk storage (`store::storage`), and the network layer (`net::fetch`, `net::policy`, `net::rate_limit`, `net::robots`) |
+| `wnd-core` | `crates/core` | everything site-independent: the model (`store::model`), on-disk storage (`store::storage`), and the network layer (`net::fetch`, `net::policy`, `net::rate_limit`, `net::robots`, `net::blocked`) |
 | `wnd-sources` | `crates/sources` | one adapter per site or site family, plus the registry that picks one |
 | `wnd-download` | `crates/download` | orchestration: a novel URL in, a novel directory out |
 | `wnd-export` | `crates/export` | EPUB, TXT and Markdown, rendered from the chapters — see [export.md](export.md) |
@@ -89,7 +89,8 @@ into `novel`, because on every site we support a single table-of-contents fetch
 carries both — and splitting them would mean fetching the same page twice.
 
 Adapters receive the `HttpClient` rather than building their own, so the fetch
-policy, rate limit, robots rules, and raw cache apply uniformly.
+policy, rate limit, robots rules, and raw cache apply uniformly — and a filter
+page or a bot challenge fails before an adapter can mistake it for markup.
 
 Adapters are deliberately small and isolated, because site HTML changes and
 adapters rot. The [raw cache](fetch.md#the-raw-cache) is what makes a fix cheap:
