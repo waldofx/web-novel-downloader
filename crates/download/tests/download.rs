@@ -48,7 +48,17 @@ fn skipped_indices(progress: &[Progress]) -> Vec<u32> {
     progress
         .iter()
         .filter_map(|event| match event {
-            Progress::Skipped { index } => Some(*index),
+            Progress::Skipped { index, .. } => Some(*index),
+            _ => None,
+        })
+        .collect()
+}
+
+fn fetched_titles(progress: &[Progress]) -> Vec<&str> {
+    progress
+        .iter()
+        .filter_map(|event| match event {
+            Progress::Fetched { title, .. } => Some(title.as_str()),
             _ => None,
         })
         .collect()
@@ -82,6 +92,9 @@ fn a_fresh_download_fetches_every_chapter_and_records_a_hash() {
     );
     assert_eq!(fetched_indices(&progress), [1, 2, 3]);
     assert!(skipped_indices(&progress).is_empty());
+    // Each event names its chapter, so a front end can print a progress line
+    // without reading the directory it is writing to.
+    assert_eq!(fetched_titles(&progress), ["第1話", "第2話", "第3話"]);
 
     // Every chapter is on disk, and every hash is recorded — that is what makes
     // the next run cheap.

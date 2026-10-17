@@ -43,6 +43,10 @@ pub struct DownloadOptions {
 }
 
 /// Progress, reported once per step so a front end can show something.
+///
+/// The events carry the chapter titles as well as the indices: a progress line
+/// that says only "chapter 43" is not something a person can use, and a front end
+/// should not have to read the directory it is writing to label its own output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Progress {
     /// The table of contents has been read. `to_fetch` is how many chapters this
@@ -53,9 +57,13 @@ pub enum Progress {
         to_fetch: usize,
     },
     /// One chapter was fetched and written.
-    Fetched { index: u32, bytes: u64 },
+    Fetched {
+        index: u32,
+        title: String,
+        bytes: u64,
+    },
     /// One chapter was already present and up to date.
-    Skipped { index: u32 },
+    Skipped { index: u32, title: String },
 }
 
 /// What a download did.
@@ -169,10 +177,11 @@ pub fn download_from(
 
     for (position, skip) in skips.iter().enumerate() {
         let index = manifest.chapters[position].index;
+        let title = manifest.chapters[position].title.clone();
 
         if *skip {
             skipped += 1;
-            on_progress(Progress::Skipped { index });
+            on_progress(Progress::Skipped { index, title });
             continue;
         }
 
@@ -188,6 +197,7 @@ pub fn download_from(
         fetched += 1;
         on_progress(Progress::Fetched {
             index,
+            title,
             bytes: written.bytes,
         });
     }
