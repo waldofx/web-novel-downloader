@@ -50,6 +50,17 @@ version away from coming back, and the next person will search for the *symptom*
 | A work with no arcs and a work with arcs need different code | they do not: an un-arc'd work has one unnamed group whose key is literally `TableOfContentsChapter:` — the empty id is the page's own shape | Resolve refs by exact key string, and treat a missing `chapter` field as "no arc". Requiring a non-empty id breaks every un-arc'd work |
 | A well-meaning change makes `published_at` read `…+09:00` like Narou's | Narou states a wall-clock time with no zone, Kakuyomu states a UTC instant; both are RFC 3339, which is all the model promises | Leave the instant as the site stated it. Converting means date arithmetic (leap years, month lengths) for a field nothing displays; a consumer that wants local time formats it |
 
+## Networks that answer for the site
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| One site opens fine in the browser, but every tool on the machine resolves it to a single address that serves a block notice | The ISP intercepts port 53 for every resolver: asking 8.8.8.8 and 1.1.1.1 **directly** both answered `202.137.1.74` for `syosetu.org`, while DoH returned Cloudflare's real addresses. The browser gets through because Secure DNS is HTTPS on 443 | It is a property of the network, not of an adapter: `Error::Blocked` now says so — see [fetch.md](fetch.md#pages-that-are-not-the-site). Windows 10 has no built-in DoH, and a local DoH resolver cannot bind port 53 while `SharedAccess` (ICS) holds it |
+| Cloudflare answers `403` with `Just a moment...` to every client we have, including one pretending to be Chrome | A managed challenge: it wants JavaScript, so the user agent is not the lever | Recognised and reported. Getting past it needs a browser-obtained clearance cookie, which is a decision for #17/#20 and not something to slip in quietly. Do not spend another afternoon on UA spoofing |
+| The filter page is never seen over `https`; the same host simply times out | The hijack box has no TLS listener, so `https://` dies at the connection while `http://` gets the notice | Expect `Error::Network` (a timeout) on a filtered `https://` URL and `Error::Blocked` on the `http://` form. Do not "fix" the timeout by retrying it |
+| A fixture captured from one machine shows a page nobody else can reproduce | The filter box branches on the client: a VPN exit got First Media's "Internet Sehat" page, the customer's own line got the Komdigi `SITUS DIBLOKIR` notice | Pin the *phrases* a filter page must contain, not a copy of one template. `crates/core/tests/fixtures/blocked/` holds one of the two; the other is pinned by its own text |
+| A Cloudflare challenge was reported as `http 403 from <url>`, which reads as the site refusing us | The challenge is only visible in the `403`'s body, and `send()` returned an error without reading it | Read the body of a non-retryable status and classify it. That costs no extra request, and `is_retryable_status()` still keeps `403` final |
+| In principle, a chapter that *quotes* a block notice would be reported as that notice | Any content heuristic can be wrong | It takes a whole phrase, inside the first 16 KB, and the cost is a clear error and a re-run — never a corrupted chapter. Keep new markers long |
+
 ## Rust layout and tests
 
 | Symptom | Cause | Fix / workaround |

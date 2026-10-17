@@ -7,7 +7,10 @@
 //! - `robots.txt`, parsed once per origin and honored,
 //! - bounded retries with exponential backoff that respects `Retry-After`,
 //! - an optional cache of raw responses, so a parser change can be re-run
-//!   without touching the site again.
+//!   without touching the site again,
+//! - and [`net::blocked`](crate::net::blocked), which catches the two answers
+//!   that are *not* the site — a filter page, or a bot challenge — before an
+//!   adapter can take one for markup.
 //!
 //! Requests are issued one at a time. The per-host delay is the real bottleneck
 //! when downloading a single novel, so concurrency would buy almost nothing
@@ -18,6 +21,7 @@
 //! hatch for a site whose published rules are stale or broken.
 
 use crate::error::{Error, Result};
+use crate::net::blocked;
 use crate::net::policy::FetchPolicy;
 use crate::net::rate_limit::RateLimiter;
 use crate::net::robots::RobotsRules;
@@ -145,12 +149,24 @@ impl HttpClient {
     }
 
     /// Fetch `url` and decode the body as text.
+    ///
+    /// A page that is not the site fails here rather than travelling on: a
+    /// filter answers with `200` and a block notice, which every adapter would
+    /// otherwise report as a parse error of its own.
     pub fn get_text(&self, url: &str) -> Result<String> {
         let response = self.send(url)?;
-        response.text().map_err(|source| Error::Network {
+        let status = response.status().as_u16();
+        let cf_mitigated = cf_mitigated(&response);
+        let body = response.text().map_err(|source| Error::Network {
             url: url.to_string(),
             source,
-        })
+        })?;
+
+        if let Some(page) = blocked::classify(cf_mitigated.as_deref(), &body) {
+            return Err(blocked_error(status, url, page));
+        }
+
+        Ok(body)
     }
 
     /// Fetch `url` as raw bytes, for images and other binary assets.
@@ -209,6 +225,14 @@ impl HttpClient {
                 Ok(response) => {
                     let status = response.status().as_u16();
                     if !is_retryable_status(status) {
+                        // A `403` is usually Cloudflare rather than the site
+                        // refusing us, so read the (small) error page and say
+                        // which of the two it was.
+                        let cf_mitigated = cf_mitigated(&response);
+                        let body = response.text().unwrap_or_default();
+                        if let Some(page) = blocked::classify(cf_mitigated.as_deref(), &body) {
+                            return Err(blocked_error(status, url, page));
+                        }
                         return Err(Error::Http {
                             status,
                             url: url.to_string(),
@@ -277,6 +301,25 @@ impl HttpClient {
             .expect("robots cache lock poisoned")
             .insert(origin, rules.clone());
         rules
+    }
+}
+
+/// Cloudflare's `Cf-Mitigated` header, when a response carries one.
+fn cf_mitigated(response: &reqwest::blocking::Response) -> Option<String> {
+    response
+        .headers()
+        .get("cf-mitigated")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+}
+
+/// The error a recognised block page becomes.
+fn blocked_error(status: u16, url: &str, page: blocked::BlockPage) -> Error {
+    Error::Blocked {
+        status,
+        url: url.to_string(),
+        kind: page.kind,
+        evidence: page.evidence,
     }
 }
 

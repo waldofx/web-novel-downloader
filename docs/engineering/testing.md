@@ -43,6 +43,10 @@ editing Rust.
 When a fixture is updated from a live capture, re-read the assertions that depend
 on it — a changed page is exactly when an adapter needs attention.
 
+`crates/core/tests/fixtures/blocked/` holds the two pages that are *not* the site
+(a filter's block notice, Cloudflare's challenge), each captured from the real
+thing with `curl`. They are not a site's markup, but they rot the same way.
+
 ## The suite must pass offline
 
 Network tests are `#[ignore]`d. They must never make `cargo test` depend on a
@@ -80,6 +84,8 @@ paste the output. "Should work" is not evidence.
 | model serialization, storage round-trip, hash stability | `core/src/store/{model,storage}.rs` | temp directories; atomic writes leave no `.tmp` behind |
 | the download sequence: resume, `--force`, `--max-chapters`, adult refusal, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
 | the exports: exact TXT and Markdown documents, EPUB structure, reproducibility | `crates/export/tests/export.rs` | a novel written to a temp directory; the EPUB is read back with `zip` |
+| the two pages that are *not* the site: markers, the `Cf-Mitigated` header, the 16 KB scan prefix | `core/src/net/blocked.rs` | fixture captures in `crates/core/tests/fixtures/blocked/` |
+| that a `200` filter page never reaches an adapter, and that a `403` challenge is reported as a challenge rather than as a status | `crates/core/tests/blocked.rs` | a real one-shot socket on `127.0.0.1`, so it stays offline; the exact user-facing sentence is asserted |
 | Narou DOM helpers, notation, blank lines, TOC, dates | `sources/src/narou/*` | fixture files |
 | the shared DOM helpers, blank-line rule and inline walk | `sources/src/{dom,blocks,inline}.rs` | both adapters go through them, so they are covered by both adapters' tests as well as their own |
 | Kakuyomu's snapshot reader, arc grouping, blank-line counts, body scoping | `sources/src/kakuyomu/*` | fixture files, including a work whose HTML would lie about its size |

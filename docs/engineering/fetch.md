@@ -66,6 +66,50 @@ Two details that matter:
   exists for unusual cases, it is not the default, and it is not a licence to
   ignore a site's wishes. See [Stance](#stance).
 
+## Pages that are not the site
+
+Two answers arrive where a novel page was expected, and neither should reach an
+adapter. `net::blocked` recognises them, so the failure names the network or the
+site's bot policy instead of blaming a parser for markup it never saw.
+
+| What answered | Status | How it is recognised |
+| --- | --- | --- |
+| an ISP content filter — Trustpositif/Komdigi's `SITUS DIBLOKIR` notice, First Media's "Internet Sehat" | `200`, which is the insult | a whole phrase from the page: `SITUS DIBLOKIR`, `DIBLOKIR OLEH PEMERINTAH INDONESIA`, `aduanpseprivat@komdigi.go.id`, `internetsehat.firstmedia.com` |
+| Cloudflare's browser challenge | `403` with `Cf-Mitigated: challenge` | the `Just a moment...` title **and** Cloudflare's challenge script (`challenge-platform` or `__cf_chl`) — or that header alone, when there is no readable body |
+
+The markers are whole phrases, matched case-insensitively, and only within the
+first 16 KB of a body. `BLOCKED` or `DIBLOKIR` on its own would match a novel;
+the phrases do not. The captures behind them live in
+`crates/core/tests/fixtures/blocked/`.
+
+Either case fails as one error, carrying the status and a quote from the page:
+
+```
+error: could not download https://h.syosetu.org/novel/288118/: Cloudflare served its browser challenge instead of the site (HTTP 403): the page says "Just a moment..."
+```
+
+(`error: could not download <url>:` is the CLI's own prefix; the library's
+message begins at "Cloudflare".) The status is in the text deliberately: a filter
+answers `200`, and a reader deserves to see that rather than a success that turns
+into "could not parse".
+
+Reading the body of a non-retryable status is the only cost this adds, and it is
+not a retry — a challenge is never asked twice. `is_retryable_status()` still
+keeps `403` final.
+
+### Ways past, and the ones we refuse
+
+The challenge *can* be passed: a real browser runs the script and is let in.
+Using what it leaves behind — a `cf_clearance` cookie sent with the same
+user agent — is a decision about the tool's identity rather than a bug fix, and
+it is the same decision [Pixiv #20][pixiv] is waiting on. Until that is settled
+this layer reports and stops. It does not spoof a browser user agent, hammer the
+challenge, or pretend a block page was a novel: a Chrome user agent was tried
+against the real site and got the same `403`, which is exactly why that is not
+the answer.
+
+[pixiv]: https://github.com/waldofx/web-novel-downloader/issues/20
+
 ## The raw cache
 
 `RawCache` stores fetched bodies under a novel's `raw/` directory. It exists for
