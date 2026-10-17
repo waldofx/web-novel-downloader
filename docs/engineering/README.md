@@ -10,7 +10,7 @@ Read in this order the first time:
 2. [format.md](format.md) — the on-disk and interchange format, and the
    invariants that must not be broken
 3. [fetch.md](fetch.md) — politeness, retries, caching, `robots.txt`
-4. [sources.md](sources.md) — the site roadmap, and how to add an adapter
+4. [sessions.md](sessions.md) — the user-owned cookie store for challenged sites
 5. [sources.md](sources.md) — the site roadmap, and how to add an adapter
 6. [export.md](export.md) — EPUB, TXT and Markdown, and why the output is
    reproducible

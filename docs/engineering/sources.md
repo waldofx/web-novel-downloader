@@ -20,9 +20,9 @@ The site roadmap, in priority order, plus what it takes to add one.
 
 | Site | Status | Platform notes | Difficulty |
 | --- | --- | --- | --- |
-| `syosetu.org` | · | **Hameln** (ハーメルン). Fan-fiction oriented; a different platform from Narou. | Medium |
-| `h.syosetu.org` | · | Appears to be Hameln's adult sibling. **To verify** whether it shares Hameln's markup. **Adult — gated.** | Low (if shared) |
-| `pixiv.net/novel` | · | Pixiv novels. Needs **login cookies** and/or its API for many works. Adult content possible. | High |
+| `syosetu.org` | · | **Hameln** (ハーメルン). Fan-fiction oriented; a different platform from Narou. Cloudflare challenge: reachable with a user-provided session (#31). Captures still needed. | Medium |
+| `h.syosetu.org` | · | Appears to be Hameln's adult sibling. **To verify** whether it shares Hameln's markup. **Adult — gated.** Challenge-gated too. | Low (if shared) |
+| `pixiv.net/novel` | · | Pixiv novels. Needs **login cookies** — now via a user-provided session (#31) — and/or its API for many works. Adult content possible. | High |
 
 ## P2 — TODO
 

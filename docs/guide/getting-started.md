@@ -14,6 +14,7 @@ describes a directory you already have. Other sites come next — see the
 | `nvd update <dir>` | works |
 | `nvd export <dir> --format epub` | works |
 | `nvd info <dir>` | works |
+| `nvd session save/list/delete` | works (user-provided cookies for challenged sites) |
 
 ## Build it
 
@@ -63,6 +64,7 @@ Flags for `download` (`nvd download --help` lists them all):
 | `--max-chapters` | stop after this many chapters, counting from the first |
 | `--force` | re-fetch every chapter, ignoring what is already on disk |
 | `--no-robots` | do not consult `robots.txt`. You almost certainly do not want this |
+| `--session` | use a saved session (by name) for the hosts it names — for sites that challenge ordinary clients |
 
 There is no `--resume` flag because resuming is what happens by default: run the
 same command again and it fetches only what is missing. `--force` is the opposite.
@@ -74,6 +76,7 @@ Flags for `update`:
 | --- | --- |
 | `--allow-adult` | allow an adult directory. Refused otherwise before anything is requested, because the rating is already in its manifest |
 | `--check` | fetch every chapter and compare it, rewriting only the ones that really differ. One request per chapter: the only way to find an edit on a site that does not announce revisions |
+| `--session` | use a saved session (by name) for the hosts it names |
 
 `nvd update` reads the novel's address out of the directory's own `manifest.json`,
 so it takes no URL: it is something you do *to a folder*. A chapter is fetched when

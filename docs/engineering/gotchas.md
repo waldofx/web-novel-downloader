@@ -65,6 +65,17 @@ version away from coming back, and the next person will search for the *symptom*
 | The interception probe fires on a site that merely has its own not-found page | Many sites answer an unknown path with `200` and a template that echoes the URL it was asked for | The comparison is byte for byte **on purpose**, so a template that differs by the URL does not match. Do not "improve" it with a fuzzy comparison — that is the false positive |
 | A cached body has no status, media type or final URL to report | `get_text_cached` stores the body only | It is for re-parsing, not for reporting. Anything that may have to say what answered uses `get_page`, and takes the facts with it |
 
+## Sessions and credentials
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| A `cookies.txt` line that looks fine is not read as a cookie | `#HttpOnly_` in front of the domain is a marker on a **real** cookie, not a comment; every other `#` is a comment. A parser that treats every `#`-prefixed line as a comment silently drops the session cookies | `netscape::parse` strips the marker and treats the rest as a cookie. Test: `an_http_only_line_is_a_cookie_not_a_comment` |
+| An editor-saved `cookies.txt` breaks on its first line | "UTF-8 with BOM" puts `U+FEFF` where the first domain should be | Strip a leading BOM before parsing (`text.strip_prefix('\u{feff}')`) |
+| A cookie file's error message quotes the secret | An error message ends up in terminals, logs and issues, and a cookie is a credential | Errors name the line and the reason only: `not a Netscape cookies.txt: line 1: ...`. Never the content |
+| A session's `Debug` output reveals a cookie value | `#[derive(Debug)]` on a struct holding a `value` field prints it | Hand-write `Debug` for `Cookie` and `Session`, redacting the value; a test asserts it (`a_cookie_never_prints_its_value`) |
+| A session is offered to a host it does not name | The filter is "send if the host matches", and a naive suffix check matches `notpixiv.net` | `host_is_covered` requires a dot boundary, rejects IPs' subdomains, and is case-insensitive. A session with no hosts goes nowhere |
+| `list` of an empty store is an error | The directory does not exist yet on a fresh machine | `list` returns an empty vector when the directory is missing; `save` creates it |
+
 ## Rust layout and tests
 
 | Symptom | Cause | Fix / workaround |

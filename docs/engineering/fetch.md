@@ -138,12 +138,14 @@ than any list of strings, and it covers the challenges that are not Cloudflare's
 
 The challenge *can* be passed: a real browser runs the script and is let in.
 Using what it leaves behind — a `cf_clearance` cookie sent with the same
-user agent — is a decision about the tool's identity rather than a bug fix, and
-it is the same decision [Pixiv #20][pixiv] is waiting on. Until that is settled
-this layer reports and stops. It does not spoof a browser user agent, hammer the
-challenge, or pretend a block page was a novel: a Chrome user agent was tried
-against the real site and got the same `403`, which is exactly why that is not
-the answer.
+user agent — is now a supported path, but only when the user hands it over
+deliberately. See [Sessions](#sessions): the tool never borrows a browser
+session on its own, never clears a challenge, and never does anything to a
+session the user did not give it. Without one, a challenged site keeps failing
+loudly, exactly as it did before. This layer reports and stops on its own; it
+does not spoof a browser user agent, hammer the challenge, or pretend a block
+page was a novel: a Chrome user agent was tried against the real site and got
+the same `403`, which is exactly why that is not the answer.
 
 [pixiv]: https://github.com/waldofx/web-novel-downloader/issues/20
 
@@ -154,13 +156,44 @@ one reason: **adapters rot**. When a site changes its HTML, the saved pages can
 be re-parsed offline while the adapter is being fixed — with no re-download and
 no second visit to a site that has already been polite to us.
 
-## Cookies
+## Sessions
 
-A per-domain store, **gitignored**, for login-gated sources such as Pixiv. Rules:
+A session is a cookie jar the user exported from their own browser and handed
+over by name. It is the mechanism behind the rule above: a site that answers an
+ordinary client with Cloudflare's browser challenge can be reached with a
+clearance cookie the user obtained themselves, and with nothing else.
 
-- Only accounts the user owns. The tool never borrows a session it was not given.
-- Per-domain, so one site's session can never leak into another's.
-- Never committed, never logged.
+- **The tool never borrows a session it was not given.** No browser is opened,
+  no challenge is solved, no session is touched that the user did not hand over.
+  Without one, a challenged site keeps failing loudly.
+- **Per host.** A session for `pixiv.net` is never offered to `i.pximg.net`,
+  which is a different site that merely serves the images, and a session with no
+  hosts goes nowhere whatever it holds.
+- **Named, never valued.** `save`, `list` and `delete` are the whole API, and
+  `list` shows name, hosts, saved time and the earliest expiry — never a cookie
+  value. No value reaches a log, an error message, or `Debug`.
+- **Where they live.** One JSON file per session under the user's own data
+  directory: `%LOCALAPPDATA%\\web-novel-downloader\\sessions` on Windows,
+  `~/Library/Application Support/web-novel-downloader/sessions` on macOS, and
+  `$XDG_DATA_HOME/web-novel-downloader/sessions` or
+  `~/.local/share/web-novel-downloader/sessions` elsewhere. `0600` on Unix,
+  written atomically. See [sessions.md](sessions.md).
+- **A challenge with a session in use blames the session.** A `403` that arrives
+  while a jar was sent says the session may have expired and can be refreshed by
+  saving it again — the commonest cause, and otherwise a confusing one.
+- **Save replaces.** Saving under an existing name is the refresh gesture.
+
+### Import format
+
+The import format is **Netscape `cookies.txt`**: every browser export extension
+writes it and `curl -b` reads it, so the user's existing tooling already produces
+it and nothing here has to be the only way in. Internal storage is our own JSON.
+
+### How to remove them by hand
+
+Delete the files under the directory above, or `nvd session delete <name>`. The
+directory itself is created on the first save; if it does not exist, there are
+no sessions. Nothing is stored anywhere else.
 
 ## Stance
 
