@@ -97,11 +97,14 @@ pub enum Error {
     },
 
     /// A transport-level failure (timeout, DNS, reset) after retries.
-    #[error("network error for {url}: {source}")]
+    #[error("network error for {url}: {source}{hint}")]
     Network {
         url: String,
         #[source]
         source: reqwest::Error,
+        /// The conditional hint appended for a connect timeout, or empty.
+        /// Carried as a field so the message stays in one place.
+        hint: String,
     },
 
     /// `robots.txt` asked us not to fetch this path.

@@ -222,6 +222,7 @@ impl HttpClient {
         let body = response.text().map_err(|source| Error::Network {
             url: url.to_string(),
             source,
+            hint: String::new(),
         })?;
 
         Ok(Page {
@@ -264,6 +265,7 @@ impl HttpClient {
         let bytes = response.bytes().map_err(|source| Error::Network {
             url: url.to_string(),
             source,
+            hint: String::new(),
         })?;
         Ok(bytes.to_vec())
     }
@@ -364,11 +366,15 @@ impl HttpClient {
                         return Err(Error::Network {
                             url: url.to_string(),
                             source,
+                            hint: String::new(),
                         });
                     }
+                    let hint =
+                        connect_timeout_hint(source.is_timeout(), source.is_connect()).to_string();
                     last = Some(Error::Network {
                         url: url.to_string(),
                         source,
+                        hint,
                     });
                 }
             }
@@ -493,6 +499,19 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
+/// The hint appended to a network error when it is a connect timeout.
+///
+/// A filtered host reached over `https://` has no TLS listener, so the
+/// connection simply times out. The hint says so without claiming it *is* a
+/// filter: a genuine timeout of a healthy site looks the same.
+pub(crate) fn connect_timeout_hint(is_timeout: bool, is_connect: bool) -> &'static str {
+    if is_timeout && is_connect {
+        "\n  a content filter, a captive portal or a VPN can look exactly like this: the name resolved, and nothing answered"
+    } else {
+        ""
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -597,6 +616,15 @@ mod tests {
             !path.ends_with('-'),
             "the suffix must be there, so the path is never the same twice: {path}"
         );
+    }
+
+    #[test]
+    fn a_connect_timeout_carries_the_hint_and_others_do_not() {
+        let sentence = "a content filter, a captive portal or a VPN can look exactly like this: the name resolved, and nothing answered";
+        assert!(connect_timeout_hint(true, true).contains(sentence));
+        assert_eq!(connect_timeout_hint(true, false), "");
+        assert_eq!(connect_timeout_hint(false, true), "");
+        assert_eq!(connect_timeout_hint(false, false), "");
     }
 
     #[test]
