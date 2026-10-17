@@ -45,11 +45,13 @@ version away from coming back, and the next person will search for the *symptom*
 | A `#[test]` in a `tests/` subfolder never runs | Cargo compiles only **top-level** files in `tests/`; subfolders are modules | Name the file `tests/<feature>_<kind>.rs`; keep subfolders for shared helpers and fixtures only |
 | A test fails and the implementation looks wrong | sometimes the **expectation** is wrong (a bad index, a trailing U+3000 that is genuinely content) | Decide which side is wrong before touching either. Fixing code to satisfy a wrong test is worse than red — see the `test-first` skill |
 | `cargo clippy` is clean but the test code has warnings | `--all-targets` was omitted | `cargo clippy --workspace --all-targets -- -D warnings` |
+| Clippy fails a loop that walks a `Vec` by index ("the loop variable is used to index …") | `needless_range_loop` — and it fires even when the collection being indexed is a *different* one from the collection being iterated | Iterate the one you only read (`for (position, skip) in skips.iter().enumerate()`) and index the one the body must mutate |
 
 ## Format and storage
 
 | Symptom | Cause | Fix / workaround |
 | --- | --- | --- |
-| A crash mid-write left a truncated JSON file that fails to parse | `write_json` currently writes in place with `fs::write` | Becomes atomic (temp file + rename) with the downloader; `fs::rename` replaces an existing file on Windows as well as Unix, so one implementation covers both. See [format.md](format.md#storage-mechanics) |
+| A crash mid-write left a truncated JSON file that fails to parse | `write_json` writes a sibling `.tmp` and renames it over the target | Never write a data file in place: the rename replaces an existing file on Windows as well as Unix, so one implementation is atomic on both. See [format.md](format.md#storage-mechanics) |
+| The manifest records a hash but the chapter file is empty, stale, or hand-edited | the file write and the manifest update are separate steps, so a kill between them leaves the two disagreeing | Resume verifies the **content hash**, never existence. Do not "simplify" that check to `exists()`: it would accept exactly the cases the hash exists to catch |
 | A chapter was re-fetched although it was already on disk | resume trusts file existence instead of content | Resume only when the stored hash exists, the file exists, **and** re-hashing the file reproduces the stored hash |
 | An adapter was blamed for an empty chapter that was never cached | a page with no text block returned an empty chapter instead of an error | A chapter page with no text container is `SourceError::Parse` — silence there hides adapter rot |

@@ -45,7 +45,7 @@ A Cargo workspace, split so that each concern can be replaced independently.
 | --- | --- | --- |
 | `wnd-core` | `crates/core` | everything site-independent: the model (`store::model`), on-disk storage (`store::storage`), and the network layer (`net::fetch`, `net::policy`, `net::rate_limit`, `net::robots`) |
 | `wnd-sources` | `crates/sources` | one adapter per site or site family, plus the registry that picks one |
-| `wnd-download` | `crates/download` *(planned)* | orchestration: a novel URL in, a novel directory out |
+| `wnd-download` | `crates/download` | orchestration: a novel URL in, a novel directory out |
 | `nvd` | `crates/cli` | the command-line front end |
 
 Planned later: `apps/gui` (Tauri) and `crates/translate`.
@@ -95,23 +95,34 @@ the saved HTML can be re-parsed offline, without re-downloading anything.
 ```
                      ┌── Source::novel ──► Manifest (metadata + chapter index)
    URL ──find──► Source                                   │
-                                                         ├─► manifest.json
-                     ┌───────────────────────────────────┘
+                                                          ├─► manifest.json
+                     ┌────────────────────────────────────┘
                      │
-   for each missing chapter:
+   for each chapter still missing:
                      ├── Source::chapter ──► Chapter (node tree)
-                     │                        ├─► chapters/NNNN.json
-                     │                        └─► chapters/NNNN.html
-                     └─► update manifest.json with the chapter's hash
+                     │                        └─► chapters/NNNN.json
+                     └─► rewrite manifest.json with the chapter's hash
 
    exporters:      chapters/*.json ──► EPUB / TXT / Markdown
                    (never touch the network)
 ```
 
-The manifest is written **before** the chapters and updated after each one, so
-an interrupted run leaves a directory that is valid and resumable rather than a
-half-written lie. Resume compares recorded hashes instead of trusting the file
-to exist; see [format.md](format.md#resume-and-update).
+`crates/download` owns that sequence, and four properties of it are deliberate:
+
+1. **Nothing is written until the table of contents succeeds**, so a bad URL or a
+   dead site leaves no directory behind at all.
+2. **The adult check happens before the first write**, and after the index read:
+   the rating is a property of the *work*, not of the URL, so it cannot be
+   checked earlier.
+3. **The plan is computed before the first request**, so "2 of 89" is known up
+   front rather than discovered as it goes.
+4. **The manifest is durable before the first chapter and rewritten after each
+   one.** A failure mid-novel therefore leaves a valid, resumable directory: the
+   chapters already fetched keep their hashes and are never fetched again.
+
+Resume compares recorded hashes rather than trusting a file to exist — existence
+alone would accept a truncated or hand-edited chapter. The rule is in
+[format.md](format.md#resume-and-update).
 
 ## Error handling
 
@@ -132,7 +143,7 @@ user's problem.
 | --- | --- | --- |
 | **M0** | repo, design docs, source roadmap | done |
 | **M1** | `core`: model, storage, fetch policy, rate limiter, robots | done |
-| **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | in progress |
+| **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | adapter and orchestrator done; export next, then CLI wiring |
 | **M3** | **Kakuyomu** adapter | — |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | — |
 | **M5** | **Pixiv** (cookie-based auth) | — |

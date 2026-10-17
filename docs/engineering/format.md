@@ -140,9 +140,6 @@ rot, and an empty chapter would be cached and never re-fetched.
 
 ## Resume and update
 
-> **Designed, not yet implemented.** This section is the contract the downloader
-> (`crates/download`) is being written against; see [architecture.md](architecture.md#roadmap).
-
 The manifest records a `sha256:` hash of each chapter's canonical JSON. That is
 what makes resume and update cheap:
 
@@ -150,8 +147,10 @@ what makes resume and update cheap:
   then rewrite it after each chapter. An interrupted run leaves a valid,
   resumable directory rather than a half-written lie.
 - On the next run, **skip** a chapter only when all three hold: the stored
-  manifest has a hash for that index, the file exists, and re-hashing the file
-  gives the same hash. Anything else re-fetches.
+  manifest has a hash for that index, the file reads back, and hashing the parsed
+  content reproduces that hash. Anything else — missing, truncated, corrupt, or
+  edited — re-fetches. The comparison is over content, not bytes, so accidental
+  whitespace is not mistaken for a change.
 - `--force` ignores stored hashes and re-fetches everything.
 - A stored manifest whose `source.novel_url` differs from the requested novel is
   ignored, not trusted.
@@ -162,14 +161,15 @@ what makes resume and update cheap:
 only thing that knows the directory layout — nothing else builds these paths by
 hand.
 
-- `write_chapter` returns the hash of what it wrote, so the caller can record it
-  in the manifest without re-reading the file.
+- `write_chapter` returns `Written { hash, bytes }`, so the caller records the
+  hash and reports progress without reading the file back.
 - `hash_json` is the one definition of a chapter hash: it hashes the serialized
-  form, so the same content always yields the same hash.
-- `write_json` is currently a plain write. It becomes **atomic** (write a
-  sibling temporary file, then rename over the target) with the downloader:
-  a crash mid-write must leave either the old file or the new one, never a
-  truncated one. `fs::rename` replaces an existing file on Windows as well as
-  Unix, so the same code works on both — see [gotchas](gotchas.md).
+  value, so equal content always produces an equal hash — which is what makes
+  "is this file still what we fetched?" a single comparison.
+- `write_json` is **atomic**: it writes a sibling `<name>.tmp` and renames it over
+  the target. An interrupted write therefore leaves either the old file or the
+  new one, never a truncated one. `fs::rename` replaces an existing file on
+  Windows as well as Unix, so one implementation covers both, and a failed write
+  removes its temporary file on the way out.
 - JSON is pretty-printed on purpose: these files are meant to be diffed and read
   by humans, and they are the input to the translation stage.

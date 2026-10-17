@@ -29,7 +29,9 @@ destroying the furigana and the layout.
 - **Slowly and politely.** It waits between requests, says who it is, and
   respects a site's `robots.txt`. It is not a scraper that hammers a server.
 - **Resumable.** If you stop it, or the connection drops, run it again — it
-  fetches only what is missing. (Planned; see [getting started](getting-started.md).)
+  re-reads the chapter list and fetches only what is missing. (The engine does
+  this today; the command that drives it is still to come — see
+  [getting started](getting-started.md).)
 - **Honest about content.** Adult sources are never fetched unless you
   explicitly ask for them.
 

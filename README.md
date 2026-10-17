@@ -9,9 +9,9 @@ feed the EPUB / TXT / Markdown exporters.
 
 ## Status
 
-Early, and **not usable as a downloader yet**. The fetch layer and the Narou
-adapter are implemented and tested; the downloader, the exporters, and the CLI
-wiring are in progress. Only `nvd info` does anything today.
+Early, and **not usable as a downloader yet**. The fetch layer, the Narou adapter,
+and the download orchestrator are implemented and tested; the exporters and the
+CLI wiring are still to come. Only `nvd info` does anything today.
 
 | | |
 | --- | --- |

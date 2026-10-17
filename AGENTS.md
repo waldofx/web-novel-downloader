@@ -33,6 +33,7 @@ Global OpenCode skills carry the portable version of these conventions:
 | --- | --- |
 | `crates/core` | site-independent code: `store/` (the model and on-disk storage) and `net/` (fetch, policy, rate limiting, robots) |
 | `crates/sources` | one adapter per site or site family, as a folder of one job per file (e.g. `narou/{toc,chapter,inline,dom}.rs`) |
+| `crates/download` | orchestration: a novel URL in, a novel directory out |
 | `crates/cli` | the `nvd` binary |
 | `crates/*/tests` | per-feature integration tests; captured HTML in `tests/fixtures/<site>/` |
 | `docs/guide` | plain-language docs for users |
