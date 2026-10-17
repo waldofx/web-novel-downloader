@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/sources", "crates/download", "crates/cli"]
+members = ["crates/core", "crates/sources", "crates/download", "crates/export", "crates/cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ repository = "https://github.com/waldofx/web-novel-downloader"
 wnd-core = { path = "crates/core" }
 wnd-sources = { path = "crates/sources" }
 wnd-download = { path = "crates/download" }
+wnd-export = { path = "crates/export" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -21,3 +22,5 @@ url = "2"
 clap = { version = "4", features = ["derive"] }
 scraper = "0.27"
 reqwest = { version = "0.13", features = ["blocking", "gzip"] }
+# Flate2 without zopfli: deflate at a sane speed, pure-Rust backend, no C toolchain.
+zip = { version = "7", default-features = false, features = ["deflate-flate2"] }
