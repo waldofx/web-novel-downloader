@@ -76,6 +76,7 @@ paste the output. "Should work" is not evidence.
 | --- | --- | --- |
 | policy defaults, retry classification, backoff, `Retry-After` | `core/src/net/*` unit tests | no network |
 | `robots.txt` parsing and decisions | `core/src/net/robots.rs` | plus one live test |
-| model serialization, storage round-trip, hash stability | `core/src/store/{model,storage}.rs` | temp directories |
+| model serialization, storage round-trip, hash stability | `core/src/store/{model,storage}.rs` | temp directories; atomic writes leave no `.tmp` behind |
+| the download sequence: resume, `--force`, `--max-chapters`, adult refusal, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
 | Narou DOM helpers, notation, blank lines, TOC, dates | `sources/src/narou/*` | fixture files |
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |

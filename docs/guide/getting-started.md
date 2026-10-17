@@ -2,17 +2,17 @@
 
 ## Status (October 2026)
 
-**This tool cannot download a novel yet.** It is being built in milestones; see
-the [roadmap](../engineering/architecture.md#roadmap). The fetch layer and the
-Narou adapter exist and are tested, but the downloader, the exporters, and the
-CLI wiring are still ahead.
+**There is no working download command yet.** The engine is ready — the fetch
+layer, the Narou adapter, and the download orchestrator are implemented and
+tested — but the CLI that drives it and the exporters are still ahead. Progress
+is tracked in the [roadmap](../engineering/architecture.md#roadmap).
 
 What works today:
 
 | Command | State |
 | --- | --- |
 | `nvd info <dir>` | works — reads a downloaded directory |
-| `nvd download <url> --out <dir>` | not implemented yet |
+| `nvd download <url> --out <dir>` | the engine works and is tested; the command is not wired up yet |
 | `nvd update <dir>` | not implemented yet |
 | `nvd export <dir> --format epub` | not implemented yet |
 

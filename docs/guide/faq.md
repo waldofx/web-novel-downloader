@@ -41,8 +41,9 @@ delay between requests is not a limitation to be tuned away.
 
 ### It stopped halfway. Do I start over?
 
-No. Run the same command again and chapters already fetched are skipped. (This
-lands with the downloader; see [getting started](getting-started.md).)
+No. Run the same command again: it re-reads the chapter list, checks each
+chapter's recorded hash, and fetches only what is missing — or what changed on
+disk since it was written.
 
 ### Where did the author's notes go?
 
