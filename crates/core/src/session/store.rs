@@ -93,7 +93,10 @@ impl Session {
 
     /// The first moment any of its cookies expires, or `None` when none does.
     pub fn expires_at(&self) -> Option<u64> {
-        self.cookies.iter().filter_map(|cookie| cookie.expires_at).min()
+        self.cookies
+            .iter()
+            .filter_map(|cookie| cookie.expires_at)
+            .min()
     }
 
     /// The summary `list` shows.
@@ -110,7 +113,10 @@ impl Session {
 
 /// The hosts a jar names: every cookie's domain, once, in order.
 pub fn hosts_of(cookies: &[Cookie]) -> Vec<String> {
-    let mut hosts: Vec<String> = cookies.iter().map(|cookie| cookie.domain.to_lowercase()).collect();
+    let mut hosts: Vec<String> = cookies
+        .iter()
+        .map(|cookie| cookie.domain.to_lowercase())
+        .collect();
     hosts.sort();
     hosts.dedup();
     hosts
@@ -180,10 +186,11 @@ impl SessionStore {
                 continue;
             }
             let text = std::fs::read_to_string(&path)?;
-            let session: Session = serde_json::from_str(&text).map_err(|source| Error::SessionFile {
-                path: path.display().to_string(),
-                source,
-            })?;
+            let session: Session =
+                serde_json::from_str(&text).map_err(|source| Error::SessionFile {
+                    path: path.display().to_string(),
+                    source,
+                })?;
             summaries.push(session.summary());
         }
         summaries.sort_by(|a, b| a.name.cmp(&b.name));
@@ -239,10 +246,7 @@ enum Platform {
 
 /// `default_dir`, with the platform and the environment passed in, so all three
 /// rules can be tested on any machine.
-fn data_dir_for(
-    platform: Platform,
-    env: impl Fn(&str) -> Option<String>,
-) -> Result<PathBuf> {
+fn data_dir_for(platform: Platform, env: impl Fn(&str) -> Option<String>) -> Result<PathBuf> {
     let root = match platform {
         Platform::Windows => env("LOCALAPPDATA").or_else(|| env("APPDATA")),
         Platform::MacOs => env("HOME").map(|home| format!("{home}/Library/Application Support")),
@@ -325,20 +329,13 @@ mod tests {
         assert_eq!(
             dir_for(
                 Platform::Windows,
-                &[
-                    ("LOCALAPPDATA", "C:/local"),
-                    ("APPDATA", "C:/roaming"),
-                ],
+                &[("LOCALAPPDATA", "C:/local"), ("APPDATA", "C:/roaming"),],
             )
             .unwrap(),
             "C:/local/web-novel-downloader/sessions"
         );
         assert_eq!(
-            dir_for(
-                Platform::Windows,
-                &[("APPDATA", "C:/roaming")],
-            )
-            .unwrap(),
+            dir_for(Platform::Windows, &[("APPDATA", "C:/roaming")],).unwrap(),
             "C:/roaming/web-novel-downloader/sessions"
         );
         assert_eq!(

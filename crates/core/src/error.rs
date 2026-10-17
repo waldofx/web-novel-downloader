@@ -81,12 +81,19 @@ pub enum Error {
     ///
     /// The URL is a field rather than part of the message on purpose: callers
     /// (the CLI) already name it, and the message reads worse for repeating it.
-    #[error("{kind} (HTTP {status})\n  {evidence}")]
+    #[error("{kind} (HTTP {status})\n  {evidence}{session_note}")]
     Blocked {
         status: u16,
         url: String,
         kind: crate::net::blocked::BlockKind,
         evidence: String,
+        /// The session that was in use for this host, if any. Never a value, only
+        /// a name — a credential stays out of an error message.
+        session: Option<String>,
+        /// The sentence appended when a session was in use, or empty. Carried as
+        /// a field rather than computed in `Display`, so the message stays in
+        /// one place.
+        session_note: String,
     },
 
     /// A transport-level failure (timeout, DNS, reset) after retries.

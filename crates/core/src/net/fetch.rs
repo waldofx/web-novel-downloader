@@ -25,12 +25,13 @@ use crate::net::blocked;
 use crate::net::policy::FetchPolicy;
 use crate::net::rate_limit::RateLimiter;
 use crate::net::robots::RobotsRules;
+use crate::session::Session;
 use reqwest::Url;
 use reqwest::header::{HeaderMap, RETRY_AFTER};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// How long to wait for a connection to be established.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -150,6 +151,7 @@ pub struct HttpClient {
     /// `robots.txt` costs one attempt rather than one per chapter.
     robots: Mutex<HashMap<String, RobotsRules>>,
     raw: Option<RawCache>,
+    session: Option<Session>,
 }
 
 impl HttpClient {
@@ -174,11 +176,30 @@ impl HttpClient {
             limiter,
             robots: Mutex::new(HashMap::new()),
             raw: raw_dir.map(RawCache::new),
+            session: None,
         })
+    }
+
+    /// Attach a session, so its cookies are sent to the hosts it names.
+    ///
+    /// The session is held by value: a client never shares or mutates a jar.
+    pub fn with_session(mut self, session: Session) -> Self {
+        self.session = Some(session);
+        self
     }
 
     pub fn policy(&self) -> &FetchPolicy {
         &self.policy
+    }
+
+    /// The session that covers `url`, when one is attached.
+    fn session_name_for(&self, url: &str) -> Option<String> {
+        let parsed = Url::parse(url).ok()?;
+        let host = parsed.host_str()?;
+        self.session
+            .as_ref()
+            .filter(|session| session.covers(host))
+            .map(|session| session.name().to_string())
     }
 
     /// Fetch `url`, and keep the facts that say who answered.
@@ -195,7 +216,7 @@ impl HttpClient {
         let content_type = content_type(&response);
 
         if let Some(page) = blocked::challenge(cf_mitigated(&response).as_deref()) {
-            return Err(blocked_error(status, url, page));
+            return Err(blocked_error(status, url, page, self.session_name_for(url)));
         }
 
         let body = response.text().map_err(|source| Error::Network {
@@ -291,7 +312,22 @@ impl HttpClient {
             }
             self.limiter.acquire_with(&host, delay);
 
-            match self.client.get(url).send() {
+            let mut request = self.client.get(url);
+            if let Some(session) = &self.session {
+                if session.covers(&host) {
+                    if let Ok(parsed) = Url::parse(url) {
+                        if let Some(header) = crate::session::cookie::cookie_header(
+                            session.cookies(),
+                            &parsed,
+                            now_secs(),
+                        ) {
+                            request = request.header(reqwest::header::COOKIE, header);
+                        }
+                    }
+                }
+            }
+
+            match request.send() {
                 Ok(response) if response.status().is_success() => return Ok(response),
                 Ok(response) => {
                     let status = response.status().as_u16();
@@ -300,7 +336,12 @@ impl HttpClient {
                         // refusing us, and Cloudflare says so in a header. The
                         // body is not read: no phrase in it is trusted.
                         if let Some(page) = blocked::challenge(cf_mitigated(&response).as_deref()) {
-                            return Err(blocked_error(status, url, page));
+                            return Err(blocked_error(
+                                status,
+                                url,
+                                page,
+                                self.session_name_for(url),
+                            ));
                         }
                         return Err(Error::Http {
                             status,
@@ -404,12 +445,26 @@ fn probe_path() -> String {
 }
 
 /// The error a recognised block page becomes.
-fn blocked_error(status: u16, url: &str, page: blocked::BlockPage) -> Error {
+fn blocked_error(
+    status: u16,
+    url: &str,
+    page: blocked::BlockPage,
+    session: Option<String>,
+) -> Error {
+    let session_note = match &session {
+        Some(name) => format!(
+            "\n  a session (`{name}`) was in use for this host: a challenge usually \
+             means it has expired — re-export it from the browser and save it again"
+        ),
+        None => String::new(),
+    };
     Error::Blocked {
         status,
         url: url.to_string(),
         kind: page.kind,
         evidence: page.evidence,
+        session,
+        session_note,
     }
 }
 
@@ -428,6 +483,14 @@ fn path_and_query(url: &Url) -> String {
         Some(query) => format!("{}?{query}", url.path()),
         None => url.path().to_string(),
     }
+}
+
+/// Unix seconds right now, for cookie expiry checks.
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
