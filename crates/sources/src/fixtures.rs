@@ -34,3 +34,10 @@ pub(crate) const KAKUYOMU_WORK_FLAT: &str =
 /// and — around the container — the header, share buttons and ad slot that must
 /// not be read as story text.
 pub(crate) const KAKUYOMU_CHAPTER: &str = include_str!("../tests/fixtures/kakuyomu/chapter.html");
+
+/// A Hameln work page: title, author, tags, a synopsis, arc headings, and
+/// chapter rows with published dates and a revision stamp.
+pub(crate) const HAMELN_WORK: &str = include_str!("../tests/fixtures/hameln/work.html");
+
+/// A Hameln chapter page: a title and a body in `#honbun`, with `<ruby>`.
+pub(crate) const HAMELN_CHAPTER: &str = include_str!("../tests/fixtures/hameln/chapter.html");

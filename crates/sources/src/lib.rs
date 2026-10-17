@@ -7,6 +7,8 @@
 //!
 //! - [`narou`] — `ncode.syosetu.com` and its R18 sibling `novel18.syosetu.com`,
 //!   split into table-of-contents, chapter, inline, and DOM parts.
+//! - [`hameln`] — `syosetu.org` and its R18 sibling `h.syosetu.org`, a different
+//!   platform from Narou.
 //! - [`kakuyomu`] — `kakuyomu.jp`, Kadokawa's site, read from the page's
 //!   Next.js snapshot where the HTML alone would be incomplete.
 //!
@@ -21,6 +23,7 @@
 //! layer what actually answered ([`SourceError::with_evidence`]). Nothing in
 //! either crate matches block-page text: the page is quoted, not recognised.
 
+pub mod hameln;
 pub mod kakuyomu;
 pub mod narou;
 
@@ -32,6 +35,7 @@ mod selectors;
 #[cfg(test)]
 mod fixtures;
 
+use crate::hameln::Hameln;
 use crate::kakuyomu::Kakuyomu;
 use crate::narou::Narou;
 use url::Url;
@@ -63,7 +67,7 @@ pub trait Source: Send + Sync {
 ///
 /// Order matters: the first adapter whose [`Source::matches`] returns true wins.
 pub fn registry() -> Vec<Box<dyn Source>> {
-    vec![Box::new(Narou), Box::new(Kakuyomu)]
+    vec![Box::new(Narou), Box::new(Kakuyomu), Box::new(Hameln)]
 }
 
 /// Find the adapter responsible for a URL.
@@ -216,6 +220,8 @@ mod tests {
                 "https://kakuyomu.jp/works/16816452221336015212/episodes/16816452221336047787",
                 "kakuyomu",
             ),
+            ("https://syosetu.org/novel/316401/", "hameln"),
+            ("https://h.syosetu.org/novel/288118/", "hameln"),
         ] {
             let url = Url::parse(raw).unwrap();
             let found = find(&sources, &url).expect("adapter should handle this URL");
