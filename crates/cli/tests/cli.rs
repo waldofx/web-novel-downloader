@@ -410,7 +410,10 @@ fn session_save_list_delete_round_trips() {
     let text = stdout(&list);
     assert!(text.contains("demo"), "got:\n{text}");
     assert!(text.contains("example.com"), "got:\n{text}");
-    assert!(!text.contains("abc123"), "a listing never carries a value: got:\n{text}");
+    assert!(
+        !text.contains("abc123"),
+        "a listing never carries a value: got:\n{text}"
+    );
 
     let delete = nvd(&[
         "--session-dir",

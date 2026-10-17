@@ -102,6 +102,25 @@ back, something is answering for the site.
 Either way, re-running once the cause is gone is safe: chapters already on disk
 are verified by hash and skipped.
 
+### A site says "Cloudflare served its browser challenge". Can I get past it?
+
+Some sites answer a downloader with a JavaScript challenge. The tool will not
+solve it or pretend to be a browser — but if you run the site yourself in a
+browser, you can hand over what the browser obtained.
+
+1. Open the site in your browser and let it load, so the browser holds the
+   clearance cookie.
+2. Export the cookies for that site in **Netscape `cookies.txt`** format — every
+   cookie-export extension writes this, and `curl -b` reads it.
+3. Save them: `nvd session save pixiv cookies.txt`
+4. Use them: `nvd download <url> --session pixiv`
+
+The session is stored under your own data directory, one file per name, `0600`
+on Unix, and is never logged or committed. `nvd session list` shows name, hosts,
+saved time and the earliest expiry — never a cookie value. `nvd session delete
+pixiv` forgets it, or delete the files by hand. If a download still gets the
+challenge, the session probably expired: re-export and save again.
+
 ### Why does a filtered site hang instead of saying so?
 
 Because the filter usually hijacks the *name*, not the connection. An `https://`

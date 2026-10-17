@@ -184,8 +184,9 @@ message shows the evidence instead of picking one. See
 | **M1** | `core`: model, storage, fetch policy, rate limiter, robots | done |
 | **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | done — `nvd download` and `nvd export` work end to end |
 | **M3** | **Kakuyomu** adapter | done — snapshot-based TOC (HTML alone lists one chapter of a thousand), real arcs, real `<ruby>` |
-| **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | — |
-| **M5** | **Pixiv** (cookie-based auth) | — |
+| **M3b** | **Sessions** — a user-owned cookie store for challenged sites (#31) | done — `nvd session save/list/delete`, `--session` on `download` and `update`; Netscape `cookies.txt` import; per-host, never logged |
+| **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | depends on M3b for the challenge; captures still needed |
+| **M5** | **Pixiv** (cookie-based auth) | depends on M3b |
 | **M6** | update tracking (fetch only new/changed chapters) | done — `nvd update` diffs the index against the recorded manifest; `--check` compares content where the site announces nothing |
 | **M7** | other sources (Royal Road, Scribble Hub, AO3, FFN, …) | — |
 | **M8** | CLI polish → Tauri GUI → translation stage | — |
