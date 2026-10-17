@@ -439,6 +439,36 @@ fn session_save_list_delete_round_trips() {
 }
 
 #[test]
+fn session_save_accepts_a_raw_cookie_header_without_an_extension() {
+    let guard = TempDir::new("session-cookie-header");
+    let session_dir = guard.path().join("sessions");
+
+    let save = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "save",
+        "pixiv",
+        "--cookie",
+        "PHPSESSID=abc123; token=xyz",
+        "--host",
+        "pixiv.net",
+    ]);
+    assert_eq!(save.status.code(), Some(0), "stderr: {}", stderr(&save));
+
+    let list = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "list",
+    ]);
+    assert_eq!(list.status.code(), Some(0), "stderr: {}", stderr(&list));
+    let text = stdout(&list);
+    assert!(text.contains("pixiv.net"), "got:\n{text}");
+    assert!(text.contains("cookies: 2"), "got:\n{text}");
+}
+
+#[test]
 fn session_save_rejects_an_empty_export() {
     let guard = TempDir::new("session-empty");
     let session_dir = guard.path().join("sessions");

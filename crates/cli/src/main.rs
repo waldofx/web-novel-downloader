@@ -139,11 +139,17 @@ enum SessionAction {
     Save {
         /// Name to give the session (e.g. "pixiv")
         name: String,
-        /// A Netscape `cookies.txt` file, as any browser export extension writes
-        file: PathBuf,
+        /// A Netscape `cookies.txt` file, as any browser export extension writes.
+        /// Not needed with `--cookie`.
+        #[arg(required_unless_present = "cookie")]
+        file: Option<PathBuf>,
         /// Restrict the session to these hosts instead of the file's own domains
         #[arg(long)]
         host: Vec<String>,
+        /// A raw `Cookie:` header, for when no extension is available. Used
+        /// instead of `file` when given.
+        #[arg(long)]
+        cookie: Option<String>,
     },
     /// List the sessions that are saved
     List,
@@ -159,6 +165,15 @@ fn main() -> ExitCode {
         Ok(code) => ExitCode::from(code),
         Err(message) => {
             eprintln!("error: {message}");
+            if message.contains("browser challenge") {
+                // Said where it is useful: a challenge with no session in play is
+                // the one case a reader can do something about.
+                eprintln!("  this site checks that its visitors run a browser.");
+                eprintln!("  save a session to get past it (no extension needed):");
+                eprintln!("    nvd session save <name> --cookie \"<Cookie header>\" --host <host>");
+                eprintln!("    nvd download <url> --session <name>");
+                eprintln!("  see docs/guide/sessions.md");
+            }
             ExitCode::FAILURE
         }
     }
@@ -331,14 +346,39 @@ fn session_cmd(action: SessionAction, session_dir: Option<&Path>) -> Result<u8, 
     let store = SessionStore::at(dir);
 
     match action {
-        SessionAction::Save { name, file, host } => {
-            let text = std::fs::read_to_string(&file)
-                .map_err(|error| format!("could not read {}: {error}", file.display()))?;
-            let cookies = netscape::parse(&text)
-                .map_err(|error| format!("could not read {}: {error}", file.display()))?;
-            if cookies.is_empty() {
-                return Err(format!("{} holds no cookies", file.display()));
-            }
+        SessionAction::Save {
+            name,
+            file,
+            host,
+            cookie,
+        } => {
+            let cookies = match &cookie {
+                // A raw Cookie header needs no file and no extension: the host
+                // comes from --host (required with --cookie).
+                Some(header) => {
+                    let host = host.first().ok_or_else(|| {
+                        "--cookie needs --host <host> to scope the session".to_string()
+                    })?;
+                    let cookies = wnd_core::session::netscape::parse_cookie_header(header, host);
+                    if cookies.is_empty() {
+                        return Err("the cookie header holds no cookies".to_string());
+                    }
+                    cookies
+                }
+                None => {
+                    let file = file
+                        .as_deref()
+                        .ok_or_else(|| "either <file> or --cookie is needed".to_string())?;
+                    let text = std::fs::read_to_string(file)
+                        .map_err(|error| format!("could not read {}: {error}", file.display()))?;
+                    let cookies = netscape::parse(&text)
+                        .map_err(|error| format!("could not read {}: {error}", file.display()))?;
+                    if cookies.is_empty() {
+                        return Err(format!("{} holds no cookies", file.display()));
+                    }
+                    cookies
+                }
+            };
             let hosts = if host.is_empty() {
                 wnd_core::session::hosts_of(&cookies)
             } else {

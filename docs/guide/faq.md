@@ -33,6 +33,18 @@ Yes. Adult sources (Narou's R18 sibling, Hameln's `h.` host) are handled like
 any other: the rating is recorded in the manifest, but nothing is refused. Each
 site enforces its own age gate, and the tool does not bypass it.
 
+### A site says "Cloudflare served its browser challenge". Can I get past it?
+
+See [sessions.md](sessions.md) for the full recipe. The short version: open the
+site in your browser, log in, press F12 → **Network** → reload → click a request
+to the site → copy the `Cookie:` header → save it with
+
+```
+nvd session save <name> --cookie "name=value; name2=value2" --host <host>
+```
+
+No extension needed. `--session <name>` on `download`/`update` then uses it.
+
 ### Do I need an account?
 
 For most sites, no. Pixiv generally needs a logged-in session; cookies stay on

@@ -113,6 +113,37 @@ pub fn parse(text: &str) -> Result<Vec<Cookie>> {
     Ok(cookies)
 }
 
+/// Every cookie in a raw `Cookie` request header, as a browser sends it.
+///
+/// This is the no-extension way in: DevTools → Network → any request → Headers →
+/// `Cookie:` carries every cookie the browser sent for that host, HttpOnly ones
+/// included, in one `name=value; name2=value2` string. The tool turns it into a
+/// session without any third-party extension.
+///
+/// The domain is not in the header, so `host` names the session's host and every
+/// cookie is stored as host-only for it.
+pub fn parse_cookie_header(header: &str, host: &str) -> Vec<Cookie> {
+    header
+        .split(';')
+        .filter_map(|pair| {
+            let (name, value) = pair.split_once('=')?;
+            let name = name.trim();
+            if name.is_empty() {
+                return None;
+            }
+            Some(Cookie {
+                domain: host.to_string(),
+                host_only: true,
+                path: "/".to_string(),
+                secure: false,
+                expires_at: None,
+                name: name.to_string(),
+                value: value.trim().to_string(),
+            })
+        })
+        .collect()
+}
+
 /// A `TRUE`/`FALSE` field.
 fn flag(value: &str, number: usize) -> Result<bool> {
     if value.eq_ignore_ascii_case("TRUE") {
@@ -252,6 +283,17 @@ www.syosetu.org\tFALSE\t/novel\tFALSE\t0\tsession_id\tabc-123
         let error =
             parse("pixiv.net\tFALSE\t/\tFALSE\t0\t\tv\n").expect_err("a cookie needs a name");
         assert!(error.to_string().contains("line 1"), "{error}");
+    }
+
+    #[test]
+    fn a_raw_cookie_header_becomes_cookies_for_that_host() {
+        let cookies = parse_cookie_header("PHPSESSID=abc; token=xyz", "pixiv.net");
+        assert_eq!(cookies.len(), 2);
+        assert_eq!(cookies[0].name, "PHPSESSID");
+        assert_eq!(cookies[0].value, "abc");
+        assert_eq!(cookies[0].domain, "pixiv.net");
+        assert!(cookies[0].host_only);
+        assert_eq!(cookies[1].name, "token");
     }
 
     #[test]
