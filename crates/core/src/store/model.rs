@@ -1,8 +1,9 @@
 //! The data model of a downloaded novel.
 //!
 //! This is the interchange format between the downloader, the exporters, and the
-//! future translation stage. See `DESIGN.md` for the rationale; the tests here
-//! assert that the serialized shape still matches what that document describes.
+//! future translation stage. See `docs/engineering/format.md` for the rationale;
+//! the tests here assert that the serialized shape still matches what that
+//! document describes.
 
 use serde::{Deserialize, Serialize};
 
@@ -228,8 +229,8 @@ mod tests {
 
     #[test]
     fn chapter_json_matches_the_documented_shape() {
-        // The exact example from DESIGN.md. If this stops parsing, the docs and
-        // the code have drifted apart.
+        // The exact example from docs/engineering/format.md. If this stops
+        // parsing, the docs and the code have drifted apart.
         let json = r#"{
           "format_version": 1,
           "index": 1,

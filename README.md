@@ -2,27 +2,35 @@
 
 Fetch web novels into a structured, style-preserving offline format.
 
-This is **stage one** of a two-stage pipeline: the downloader normalizes a novel into a documented intermediate format, and a future translation stage consumes that format — preserving markup such as ruby/furigana, emphasis, and scene breaks — before exporting to EPUB/TXT/Markdown.
+This is **stage one** of a two-stage pipeline: the downloader normalizes a novel
+into a documented intermediate format — preserving ruby/furigana, emphasis, and
+scene breaks — and a future translation stage consumes that same format. Both
+feed the EPUB / TXT / Markdown exporters.
 
 ## Status
 
-Early. The design and source roadmap are settled; implementation starts with the `core` crate and the Narou adapter.
+Early, and **not usable as a downloader yet**. The fetch layer and the Narou
+adapter are implemented and tested; the downloader, the exporters, and the CLI
+wiring are in progress. Only `nvd info` does anything today.
 
-- 📐 [DESIGN.md](DESIGN.md) — architecture, data format, fetch policy, roadmap
-- 🗺️ [docs/SOURCES.md](docs/SOURCES.md) — supported sites, priority order, adapter checklist
+| | |
+| --- | --- |
+| 📖 [docs/guide/](docs/guide/) | how it works, in plain language |
+| 🧭 [docs/engineering/](docs/engineering/) | architecture, format, fetch policy, sources, testing |
+| 🗺️ [docs/engineering/sources.md](docs/engineering/sources.md) | supported sites, in priority order |
+| ⚠️ [docs/engineering/gotchas.md](docs/engineering/gotchas.md) | the surprises, so you don't rediscover them |
+| 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) | how work is done here |
 
-## Planned usage
+## Usage
 
 ```bash
-# fetch a novel into a directory
-nvd download <novel-url> --out ./my-novel
-
-# export from the downloaded directory
-nvd export ./my-novel --format epub
-
-# update: fetch only new/changed chapters
-nvd update ./my-novel
+nvd download <novel-url> --out ./my-novel   # fetch a whole novel
+nvd info ./my-novel                         # what is in the directory
+nvd update ./my-novel                       # only new or changed chapters
+nvd export ./my-novel --format epub         # epub, txt, or md
 ```
+
+Only `info` works so far — see [getting started](docs/guide/getting-started.md).
 
 ## Format at a glance
 
@@ -36,12 +44,15 @@ my-novel/
 └── exports/          # generated EPUB/TXT/Markdown
 ```
 
+The JSON is canonical; everything else is derived and regenerable. The
+[format spec](docs/engineering/format.md) is normative.
+
 ## Building
 
-Requires a Rust toolchain (stable, MSVC target on Windows).
+Requires a Rust toolchain (stable; the MSVC target on Windows).
 
 ```bash
-cargo build
+cargo build --release
 cargo test
 ```
 
