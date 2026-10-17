@@ -95,7 +95,8 @@ my-novel/
       "index": 1,
       "title": "…",
       "url": "…",
-      "published_at": "…",
+      "arc": "第一章",
+      "published_at": "2020-04-01T23:23:00+09:00",
       "hash": "sha256:…",
       "file": "chapters/0001.json"
     }
@@ -104,6 +105,8 @@ my-novel/
 ```
 
 `content_rating` is `general` or `adult`. Per-chapter `hash` is what makes **update tracking** cheap: only changed or new chapters are re-fetched.
+
+Optional per-chapter fields are omitted when unknown: `arc` (the site's arc/章 heading) and `published_at` are absent when the site does not expose them, and `hash` is absent until the chapter has been downloaded at least once.
 
 ### Chapter JSON
 
@@ -137,6 +140,7 @@ Key decisions:
 - **Ruby is first-class**, because Japanese web novels use it constantly. EPUB renders it natively (`<ruby>`/`<rt>`); TXT can render `漢字(かんじ)`.
 - **Source-specific notation is parsed at fetch time.** Narou-family sites encode ruby *in plain text* (`｜漢字《かんじ》`) and use `《》`/`（）` as markup. Left unparsed, this notation leaks into translation and gets mangled. The parsed structure is canonical, and the untouched original text can be retained alongside it.
 - **Author notes** (`前書き`/`後書き`) are kept separate from the chapter body so they can be translated (or not) independently.
+- **Blank lines are normalized, not preserved verbatim.** Sites use empty lines for both spacing and scene changes, so a single blank line is a paragraph separator and disappears, a run of two or more becomes one `scene_break`, and leading/trailing blanks are dropped. Only ASCII whitespace is trimmed: Narou indents with U+3000, which is content.
 - **JSON is canonical, HTML is derived.** HTML is what EPUB and readers want; JSON is what the translator wants. Both come from one model, so they cannot drift.
 
 ## Fetch policy

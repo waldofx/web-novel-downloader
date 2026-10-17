@@ -8,6 +8,7 @@ pub mod narou;
 
 use crate::narou::Narou;
 use url::Url;
+use wnd_core::HttpClient;
 use wnd_core::model::{Chapter, ChapterMeta, ContentRating, Manifest};
 
 /// A website we can download novels from.
@@ -25,10 +26,10 @@ pub trait Source: Send + Sync {
     fn content_rating(&self) -> ContentRating;
 
     /// Fetch the novel's metadata and chapter index.
-    fn novel(&self, url: &Url) -> Result<Manifest, SourceError>;
+    fn novel(&self, fetch: &HttpClient, url: &Url) -> Result<Manifest, SourceError>;
 
     /// Fetch and parse a single chapter.
-    fn chapter(&self, chapter: &ChapterMeta) -> Result<Chapter, SourceError>;
+    fn chapter(&self, fetch: &HttpClient, chapter: &ChapterMeta) -> Result<Chapter, SourceError>;
 }
 
 /// Everything known at build time about the adapters we ship.
@@ -50,6 +51,16 @@ pub fn find<'a>(sources: &'a [Box<dyn Source>], url: &Url) -> Option<&'a dyn Sou
 pub enum SourceError {
     #[error("this source is not implemented yet")]
     NotImplemented,
+
+    /// The page loaded, but its shape was not what the adapter expects.
+    ///
+    /// Almost always means the site changed its HTML and the adapter needs a
+    /// fix, not that the user did anything wrong.
+    #[error("could not parse {url}: {message}")]
+    Parse { url: String, message: String },
+
+    #[error(transparent)]
+    Core(#[from] wnd_core::Error),
 
     #[error("{0}")]
     Other(String),
