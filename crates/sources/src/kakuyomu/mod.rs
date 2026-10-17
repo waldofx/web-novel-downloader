@@ -95,11 +95,13 @@ impl Source for Kakuyomu {
         })?;
         let work_id = Self::work_id(&base).expect("a canonical work URL has a work id");
 
-        let html = fetch.get_text(base.as_str())?;
-        let apollo = Apollo::from_html(&html).ok_or_else(|| SourceError::Parse {
-            url: base.to_string(),
-            message: "no page snapshot found; the site markup may have changed".to_string(),
-        })?;
+        let fetched = fetch.get_page(base.as_str())?;
+        let apollo = Apollo::from_html(&fetched.body)
+            .ok_or_else(|| SourceError::NotTheSite {
+                url: base.to_string(),
+                expected: "a page snapshot".to_string(),
+            })
+            .map_err(|error| error.with_evidence(fetch, &fetched))?;
         let page = work::parse(&apollo, work_id, &base)?;
 
         let mut manifest = Manifest::new(
@@ -120,8 +122,8 @@ impl Source for Kakuyomu {
     }
 
     fn chapter(&self, fetch: &HttpClient, meta: &ChapterMeta) -> Result<Chapter, SourceError> {
-        let html = fetch.get_text(&meta.url)?;
-        chapter::parse_chapter(&html, meta)
+        let page = fetch.get_page(&meta.url)?;
+        chapter::parse_chapter(&page.body, meta).map_err(|error| error.with_evidence(fetch, &page))
     }
 }
 

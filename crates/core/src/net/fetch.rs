@@ -8,9 +8,9 @@
 //! - bounded retries with exponential backoff that respects `Retry-After`,
 //! - an optional cache of raw responses, so a parser change can be re-run
 //!   without touching the site again,
-//! - and [`net::blocked`](crate::net::blocked), which catches the two answers
-//!   that are *not* the site — a filter page, or a bot challenge — before an
-//!   adapter can take one for markup.
+//! - and [`net::blocked`](crate::net::blocked), which catches Cloudflare's
+//!   challenge from its header, and describes an answer that cannot be read as
+//!   the site whenever an adapter says its markup is not there.
 //!
 //! Requests are issued one at a time. The per-host delay is the real bottleneck
 //! when downloading a single novel, so concurrency would buy almost nothing
@@ -107,6 +107,39 @@ impl RawCache {
     }
 }
 
+/// One answer from a host: the body, and the facts about who sent it.
+///
+/// A body on its own cannot say *what* answered — a filter page and a chapter are
+/// both text. `Page` keeps the status, the media type, and the URL that finally
+/// answered, so a page that is not the site can be reported with what actually
+/// arrived rather than guessed at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Page {
+    /// Status of the final response, after any redirects.
+    pub status: u16,
+    /// The URL that was asked for.
+    pub url: String,
+    /// The URL that answered, after redirects. Differs from `url` when the site
+    /// redirects to a canonical form — or when something that is not the site
+    /// answers in its place.
+    pub final_url: String,
+    /// Content type as sent, parameters and all.
+    pub content_type: Option<String>,
+    pub body: String,
+}
+
+impl Page {
+    /// The error for a page that is not the site's shape.
+    ///
+    /// `expected` names what was being looked for, article included — `a table of
+    /// contents`, `an episode body`. `intercepted` is the finding from
+    /// [`HttpClient::answers_every_url_the_same`], which the caller asks for,
+    /// because the caller is what knows the page should have been the site.
+    pub fn not_the_site(&self, expected: &str, intercepted: bool) -> Error {
+        blocked::not_the_site(self, expected, intercepted)
+    }
+}
+
 /// A polite HTTP client.
 #[derive(Debug)]
 pub struct HttpClient {
@@ -148,25 +181,60 @@ impl HttpClient {
         &self.policy
     }
 
-    /// Fetch `url` and decode the body as text.
+    /// Fetch `url`, and keep the facts that say who answered.
     ///
-    /// A page that is not the site fails here rather than travelling on: a
-    /// filter answers with `200` and a block notice, which every adapter would
-    /// otherwise report as a parse error of its own.
-    pub fn get_text(&self, url: &str) -> Result<String> {
+    /// A page that is not the site's shape still comes back `Ok`: only the
+    /// adapter knows what the site's markup should look like, so that judgement
+    /// belongs to the adapter — see [`Page::not_the_site`]. Cloudflare's browser
+    /// challenge is the one answer refused here, because a header says so and
+    /// nothing else sends it.
+    pub fn get_page(&self, url: &str) -> Result<Page> {
         let response = self.send(url)?;
         let status = response.status().as_u16();
-        let cf_mitigated = cf_mitigated(&response);
+        let final_url = response.url().to_string();
+        let content_type = content_type(&response);
+
+        if let Some(page) = blocked::challenge(cf_mitigated(&response).as_deref()) {
+            return Err(blocked_error(status, url, page));
+        }
+
         let body = response.text().map_err(|source| Error::Network {
             url: url.to_string(),
             source,
         })?;
 
-        if let Some(page) = blocked::classify(cf_mitigated.as_deref(), &body) {
-            return Err(blocked_error(status, url, page));
-        }
+        Ok(Page {
+            status,
+            url: url.to_string(),
+            final_url,
+            content_type,
+            body,
+        })
+    }
 
-        Ok(body)
+    /// Whether this host answers every URL with the same page.
+    ///
+    /// This is the one signal that tells "your network intercepted this" from
+    /// "the site changed its markup" without knowing a word of any language. A
+    /// site answers a path that cannot exist with its own not-found answer; a
+    /// hijacked DNS answer, a captive portal, and most content filters answer
+    /// every path with the same bytes.
+    ///
+    /// It costs a request, so it is asked only after a page has already failed to
+    /// look like the site. `body` is that failed answer, and the comparison is
+    /// byte for byte on purpose: a near-match would also match the soft-404 page
+    /// many sites serve with `200`, which echoes the URL it was asked for and
+    /// nothing else. A probe that cannot be made — a dead host, a disallowed
+    /// path — answers `false`, never an error: it is evidence, not a fetch.
+    pub fn answers_every_url_the_same(&self, url: &str, body: &str) -> bool {
+        let Ok(parsed) = Url::parse(url) else {
+            return false;
+        };
+        let probe = format!("{}{}", origin_of(&parsed), probe_path());
+        match self.get_page(&probe) {
+            Ok(answer) => answer.body == body,
+            Err(_) => false,
+        }
     }
 
     /// Fetch `url` as raw bytes, for images and other binary assets.
@@ -179,19 +247,22 @@ impl HttpClient {
         Ok(bytes.to_vec())
     }
 
-    /// Like [`HttpClient::get_text`], but reuse a body already cached under
+    /// Like [`HttpClient::get_page`], but reuse a body already cached under
     /// `name` instead of going to the network.
+    ///
+    /// The body only: a cached page remembers no status, no headers and no
+    /// redirects, because none of those were written down.
     pub fn get_text_cached(&self, url: &str, name: &str) -> Result<String> {
         if let Some(cache) = &self.raw {
             if let Some(body) = cache.get(name) {
                 return Ok(body);
             }
         }
-        let body = self.get_text(url)?;
+        let page = self.get_page(url)?;
         if let Some(cache) = &self.raw {
-            cache.put(name, &body)?;
+            cache.put(name, &page.body)?;
         }
-        Ok(body)
+        Ok(page.body)
     }
 
     /// One GET: rate limited, robots-checked, and retried.
@@ -226,11 +297,9 @@ impl HttpClient {
                     let status = response.status().as_u16();
                     if !is_retryable_status(status) {
                         // A `403` is usually Cloudflare rather than the site
-                        // refusing us, so read the (small) error page and say
-                        // which of the two it was.
-                        let cf_mitigated = cf_mitigated(&response);
-                        let body = response.text().unwrap_or_default();
-                        if let Some(page) = blocked::classify(cf_mitigated.as_deref(), &body) {
+                        // refusing us, and Cloudflare says so in a header. The
+                        // body is not read: no phrase in it is trusted.
+                        if let Some(page) = blocked::challenge(cf_mitigated(&response).as_deref()) {
                             return Err(blocked_error(status, url, page));
                         }
                         return Err(Error::Http {
@@ -311,6 +380,27 @@ fn cf_mitigated(response: &reqwest::blocking::Response) -> Option<String> {
         .get("cf-mitigated")
         .and_then(|value| value.to_str().ok())
         .map(str::to_owned)
+}
+
+/// A response's content type, when it sent one.
+fn content_type(response: &reqwest::blocking::Response) -> Option<String> {
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+}
+
+/// The path asked for to see whether a host answers everything the same.
+///
+/// It cannot name a real page, and the nanosecond suffix keeps a proxy or a cache
+/// from answering it out of its own memory.
+fn probe_path() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.subsec_nanos())
+        .unwrap_or(0);
+    format!("/web-novel-downloader-does-not-exist-{nanos:x}")
 }
 
 /// The error a recognised block page becomes.
@@ -433,6 +523,20 @@ mod tests {
     }
 
     #[test]
+    fn the_probe_path_cannot_name_a_real_page() {
+        let path = probe_path();
+
+        assert!(
+            path.starts_with("/web-novel-downloader-does-not-exist-"),
+            "{path}"
+        );
+        assert!(
+            !path.ends_with('-'),
+            "the suffix must be there, so the path is never the same twice: {path}"
+        );
+    }
+
+    #[test]
     fn an_unparseable_url_fails_before_any_request() {
         let policy = FetchPolicy {
             respect_robots: false,
@@ -440,7 +544,7 @@ mod tests {
         };
         let client = HttpClient::new(policy).unwrap();
         assert!(matches!(
-            client.get_text("not a url"),
+            client.get_page("not a url"),
             Err(Error::InvalidUrl(_))
         ));
     }

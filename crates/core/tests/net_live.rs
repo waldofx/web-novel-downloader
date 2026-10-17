@@ -16,18 +16,22 @@ use wnd_core::{Error, FetchPolicy, RobotsRules};
 #[test]
 #[ignore = "hits the network"]
 fn a_real_narou_page_is_fetched_and_decoded() {
-    let body = common::client()
-        .get_text("https://ncode.syosetu.com/n5589cg/")
+    let page = common::client()
+        .get_page("https://ncode.syosetu.com/n5589cg/")
         .expect("narou page");
 
     assert!(
-        body.contains("p-novel__title"),
+        page.body.contains("p-novel__title"),
         "expected Narou markup, got {} bytes",
-        body.len()
+        page.body.len()
     );
     assert!(
-        body.contains("乙女ゲーム"),
+        page.body.contains("乙女ゲーム"),
         "the body must decode as UTF-8, not mojibake"
+    );
+    assert_eq!(
+        page.final_url, page.url,
+        "narou must not redirect us somewhere we did not ask for"
     );
 }
 
@@ -35,8 +39,9 @@ fn a_real_narou_page_is_fetched_and_decoded() {
 #[ignore = "hits the network"]
 fn narou_robots_txt_parses_and_permits_novel_pages() {
     let body = common::client()
-        .get_text("https://ncode.syosetu.com/robots.txt")
-        .expect("robots.txt");
+        .get_page("https://ncode.syosetu.com/robots.txt")
+        .expect("robots.txt")
+        .body;
     let rules = RobotsRules::parse(&body);
     let user_agent = &FetchPolicy::default().user_agent;
 
@@ -52,7 +57,7 @@ fn narou_robots_txt_parses_and_permits_novel_pages() {
 fn a_missing_page_is_an_error_and_is_not_retried() {
     let started = Instant::now();
     let error = common::client()
-        .get_text("https://ncode.syosetu.com/n0000zz/")
+        .get_page("https://ncode.syosetu.com/n0000zz/")
         .expect_err("a nonexistent novel must not succeed");
 
     assert!(

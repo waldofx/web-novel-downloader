@@ -39,15 +39,19 @@ pub enum Error {
 
     /// The page that arrived was not the site.
     ///
-    /// A network filter (`HTTP 200`, a block notice) or Cloudflare's browser
-    /// challenge (`HTTP 403`, `Just a moment...`) — see
-    /// [`net::blocked`](crate::net::blocked). Both are a fact about the network
-    /// or the site's bot policy, and neither is a parse failure, which is what
-    /// the adapter would have reported instead.
+    /// Cloudflare's browser challenge (`HTTP 403`, a `Cf-Mitigated` header), or a
+    /// page that cannot be read as the novel page it should be — a filter, a
+    /// captive portal, a proxy, or markup the site has changed. See
+    /// [`net::blocked`](crate::net::blocked).
+    ///
+    /// Neither is a parse failure, which is what the adapter would have reported
+    /// instead. The evidence is a line per fact — the status, what arrived, and
+    /// the text that gives it away — because no list of vendor phrases can name
+    /// every filter in every country: the page names itself.
     ///
     /// The URL is a field rather than part of the message on purpose: callers
     /// (the CLI) already name it, and the message reads worse for repeating it.
-    #[error("{kind} (HTTP {status}): {evidence}")]
+    #[error("{kind} (HTTP {status})\n  {evidence}")]
     Blocked {
         status: u16,
         url: String,

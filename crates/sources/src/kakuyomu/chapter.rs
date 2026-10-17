@@ -22,7 +22,7 @@
 //!
 //! Not handled yet: illustrations inside a body, and episodes behind Kakuyomu's
 //! paywall — the first is an image pipeline (see #18), the second would surface
-//! as the parse error below rather than as a partial chapter.
+//! as the missing body below rather than as a partial chapter.
 
 use crate::SourceError;
 use crate::blocks;
@@ -48,9 +48,9 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
     }
 
     if containers == 0 {
-        return Err(SourceError::Parse {
+        return Err(SourceError::NotTheSite {
             url: meta.url.clone(),
-            message: "no episode body found; the site markup may have changed".to_string(),
+            expected: "an episode body".to_string(),
         });
     }
     Ok(chapter)
@@ -221,11 +221,14 @@ mod tests {
     }
 
     #[test]
-    fn an_episode_page_without_a_body_is_reported() {
+    fn an_episode_page_without_a_body_is_an_episode_page_that_is_not_there() {
         let error =
             parse_chapter("<html><body><p>nothing here</p></body></html>", &meta()).unwrap_err();
 
-        assert!(matches!(error, SourceError::Parse { .. }), "got {error:?}");
+        match error {
+            SourceError::NotTheSite { expected, .. } => assert_eq!(expected, "an episode body"),
+            other => panic!("expected a page that is not the site, got {other:?}"),
+        }
     }
 
     #[test]

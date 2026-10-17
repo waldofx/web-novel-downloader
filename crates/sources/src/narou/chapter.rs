@@ -32,9 +32,9 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
     }
 
     if containers == 0 {
-        return Err(SourceError::Parse {
+        return Err(SourceError::NotTheSite {
             url: meta.url.clone(),
-            message: "no chapter text found; the site markup may have changed".to_string(),
+            expected: "a chapter body".to_string(),
         });
     }
     Ok(chapter)
@@ -227,12 +227,22 @@ mod tests {
     }
 
     #[test]
-    fn chapter_pages_without_text_are_reported_as_parse_failures() {
+    fn a_page_with_no_chapter_text_is_not_a_narou_chapter_page() {
+        // A chapter is a text container full of paragraphs. No container at all
+        // is not ordinary adapter rot: it is a page that is not this site's
+        // chapter page, and the caller reports it with the evidence.
         let error = parse_chapter(
             "<html><body><p>nothing here</p></body></html>",
             &chapter_meta(1),
         )
         .unwrap_err();
-        assert!(matches!(error, SourceError::Parse { .. }), "got {error:?}");
+
+        match error {
+            SourceError::NotTheSite { url, expected } => {
+                assert_eq!(url, "https://ncode.syosetu.com/n0608gd/1/");
+                assert_eq!(expected, "a chapter body");
+            }
+            other => panic!("expected a page that is not the site, got {other:?}"),
+        }
     }
 }
