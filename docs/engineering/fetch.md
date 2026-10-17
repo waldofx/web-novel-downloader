@@ -68,34 +68,71 @@ Two details that matter:
 
 ## Pages that are not the site
 
-Two answers arrive where a novel page was expected, and neither should reach an
-adapter. `net::blocked` recognises them, so the failure names the network or the
-site's bot policy instead of blaming a parser for markup it never saw.
+A novel page is expected, and something else arrives: a DNS answer hijacked to a
+filter box, a captive portal in a hotel, a transparent proxy, Cloudflare's browser
+challenge, or the site itself after it changed its markup. `net::blocked` exists
+so the failure names what actually answered instead of blaming a parser for markup
+it never saw.
 
-| What answered | Status | How it is recognised |
+The first version of this matched **phrases** from the two filter pages we had
+actually seen (`SITUS DIBLOKIR`, `internetsehat.firstmedia.com`). A list only ever
+covers the past: it says nothing about a block page in another country, in another
+language, from a provider we have never met. What is left is only what can be said
+without knowing a vendor, a language, or a country.
+
+### The signals
+
+| Signal | Where it comes from | Vocabulary |
 | --- | --- | --- |
-| an ISP content filter — Trustpositif/Komdigi's `SITUS DIBLOKIR` notice, First Media's "Internet Sehat" | `200`, which is the insult | a whole phrase from the page: `SITUS DIBLOKIR`, `DIBLOKIR OLEH PEMERINTAH INDONESIA`, `aduanpseprivat@komdigi.go.id`, `internetsehat.firstmedia.com` |
-| Cloudflare's browser challenge | `403` with `Cf-Mitigated: challenge` | the `Just a moment...` title **and** Cloudflare's challenge script (`challenge-platform` or `__cf_chl`) — or that header alone, when there is no readable body |
+| Cloudflare's browser challenge | its `Cf-Mitigated` response header | none — a header is protocol-level, and nothing else sends it |
+| The answer came from another host | the final URL, after redirects | none |
+| The host answers **every** URL — a path that cannot exist included — with the same page, byte for byte | one extra request, once a page has already failed to look like the site | none |
+| What actually arrived | the status, size, media type, and the readable text of the body | none |
 
-The markers are whole phrases, matched case-insensitively, and only within the
-first 16 KB of a body. `BLOCKED` or `DIBLOKIR` on its own would match a novel;
-the phrases do not. The captures behind them live in
-`crates/core/tests/fixtures/blocked/`.
+Nothing matches page text. A body is used for exactly one thing: being **shown**.
 
-Either case fails as one error, carrying the status and a quote from the page:
+### The evidence
+
+An adapter knows the site's shape, so an adapter is what says a page is not the
+site. It names what it was looking for — `a table of contents`, `an episode body`
+— raises `SourceError::NotTheSite`, and the caller, which holds the `Page`, turns
+that into the user-facing message with `SourceError::with_evidence`:
 
 ```
-error: could not download https://h.syosetu.org/novel/288118/: Cloudflare served its browser challenge instead of the site (HTTP 403): the page says "Just a moment..."
+error: could not download http://syosetu.org/novel/288118/: the page that arrived is not a novel page (HTTP 200)
+  a table of contents was expected; 2741 bytes of text/html arrived instead
+  it begins: "Trustpositif SITUS DIBLOKIR / WEBSITE BLOCKED MAAF, AKSES KE SITUS INI DIBLOKIR OLEH PEMERINTAH INDONESIA …"
+  syosetu.org answered a URL that cannot exist with this same page, byte for byte: a DNS hijack, a captive portal, or a content filter is answering for it
 ```
 
-(`error: could not download <url>:` is the CLI's own prefix; the library's
-message begins at "Cloudflare".) The status is in the text deliberately: a filter
-answers `200`, and a reader deserves to see that rather than a success that turns
-into "could not parse".
+(`error: could not download <url>:` is the CLI's prefix; the library's message
+begins at "the page that arrived".) The status is in the text deliberately: a
+filter answers `200`, and a reader deserves to see that rather than a success that
+turns into "could not parse".
 
-Reading the body of a non-retryable status is the only cost this adds, and it is
-not a retry — a challenge is never asked twice. `is_retryable_status()` still
-keeps `403` final.
+The excerpt is the load-bearing part: the page names itself, in whatever language
+its operator speaks. Getting it out is more than stripping tags. The first
+kilobyte of a block page is usually a tag manager and a stylesheet, so comments and
+the contents of `<script>`/`<style>` go too; every tag leaves a word boundary
+behind; whitespace is collapsed; and the few entities that would otherwise print
+as noise are decoded. The captured First Media page in
+`crates/core/tests/fixtures/blocked/` is what keeps this honest — it is scripts and
+a spacer image, its excerpt is empty, and the message says so instead of quoting
+CSS.
+
+The two host findings are optional, because each has to be earned:
+
+- a **redirect** is only worth naming when the host that answered is not the host
+  that was asked;
+- the **probe** is the one signal that tells "your network intercepted this" from
+  "the site changed its markup", and it costs a request — so it is asked once, and
+  only after a page has already failed to look like the site. It compares **byte
+  for byte** on purpose: a near-match would also match the soft-404 page many sites
+  serve with `200`, which echoes the URL it was asked for and nothing else.
+
+A challenge page that arrives *without* the header is not a special case. It is a
+body that is not the site's shape, reported with its own text — better evidence
+than any list of strings, and it covers the challenges that are not Cloudflare's.
 
 ### Ways past, and the ones we refuse
 

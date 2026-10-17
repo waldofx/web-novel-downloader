@@ -89,8 +89,12 @@ into `novel`, because on every site we support a single table-of-contents fetch
 carries both — and splitting them would mean fetching the same page twice.
 
 Adapters receive the `HttpClient` rather than building their own, so the fetch
-policy, rate limit, robots rules, and raw cache apply uniformly — and a filter
-page or a bot challenge fails before an adapter can mistake it for markup.
+policy, rate limit, robots rules, and raw cache apply uniformly. What comes back
+is a [`Page`](fetch.md#the-evidence) — the body plus the status, media type and
+final URL — because a body on its own cannot say who answered. When an adapter
+says the markup it needs is not there, the page it holds becomes the evidence in
+the error, so a filter page or a bot challenge is reported as what it is instead
+of as a parse failure.
 
 Adapters are deliberately small and isolated, because site HTML changes and
 adapters rot. The [raw cache](fetch.md#the-raw-cache) is what makes a fix cheap:
@@ -138,10 +142,19 @@ Two error types, each owning one layer:
 - `wnd_sources::SourceError` — adapter problems, with `Core(#[from] wnd_core::Error)`
   so a fetch failure inside an adapter keeps its original classification.
 
-`SourceError::Parse { url, message }` means *the page loaded but its shape was
-not what the adapter expects*: almost always the site changed its HTML. It is
-deliberately distinct from a network failure, because only one of those is the
-user's problem.
+`SourceError::Parse { url, message }` means *the page loaded, and it is this
+site's page, but something in it was not what the adapter expects*: almost always
+the site changed its HTML. It is deliberately distinct from a network failure,
+because only one of those is the user's problem.
+
+`SourceError::NotTheSite { url, expected }` means *the shape the adapter needs is
+simply not there*. The adapter names what it was looking for, and
+`SourceError::with_evidence` — called where the page and the client are both in
+hand — turns it into `wnd_core::Error::Blocked`: the status, the size, the media
+type, the readable head of the body, and whatever the fetch layer could prove
+about the host. A filter page and a markup change look the same from here, so the
+message shows the evidence instead of picking one. See
+[fetch.md](fetch.md#the-evidence).
 
 ## Roadmap
 

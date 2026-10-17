@@ -53,18 +53,36 @@ disk since it was written.
 They are kept, separately from the chapter body, so you can keep them, hide
 them, or translate them independently.
 
-### It says a filter page or a Cloudflare challenge answered. What now?
+### It says the page that arrived is not a novel page. What now?
 
-Nothing was downloaded, and the message names what answered instead, with its
-HTTP status:
+Nothing was downloaded, and the message shows what answered instead — its HTTP
+status, its size, and the beginning of its own text:
 
-- **an ISP content-filter page** (`HTTP 200`) — your network redirected the
-  request to a block notice, because a filter is in force for that domain. The
+```
+error: could not download http://syosetu.org/novel/288118/: the page that arrived is not a novel page (HTTP 200)
+  a table of contents was expected; 2741 bytes of text/html arrived instead
+  it begins: "SITUS DIBLOKIR / WEBSITE BLOCKED MAAF, AKSES KE SITUS INI DIBLOKIR OLEH PEMERINTAH …"
+  syosetu.org answered a URL that cannot exist with this same page, byte for byte: a DNS hijack, a captive portal, or a content filter is answering for it
+```
+
+Read the quoted text: it is your own network's, in your own language, so it
+usually says plainly what is going on.
+
+- **A block notice** (`HTTP 200`) — a filter is in force for that domain. The
   tool will not pretend the notice was a novel, and getting around the filter
   (another network, a VPN) is your call rather than something it does for you.
-- **a Cloudflare challenge** (`HTTP 403`) — the site checks that its visitors
-  run JavaScript, and a downloader is not a browser. Sources behind such a check
-  need a session the tool does not have yet.
+- **A Cloudflare challenge** (`HTTP 403`) — the site checks that its visitors run
+  JavaScript, and a downloader is not a browser. It is named in so many words:
+  "Cloudflare served its browser challenge instead of the site".
+- **The site's own page**, and the tool still cannot read it — the site changed
+  its markup and the adapter needs a fix. Re-running will not help, but that
+  message is a bug report you can paste whole.
+
+Nothing is guessed from a list of known block pages: the answer is *shown*, not
+recognised, so it works the same on a network whose block page nobody here has
+ever seen. The last line is the one piece of proof, and the tool goes and gets
+it: it asks the host for a path that cannot exist, and if the same page comes
+back, something is answering for the site.
 
 Either way, re-running once the cause is gone is safe: chapters already on disk
 are verified by hash and skipped.
@@ -75,5 +93,4 @@ Because the filter usually hijacks the *name*, not the connection. An `https://`
 request then lands on a box with no valid certificate and times out rather than
 answering, so you get a network error naming the URL and the timeout. The
 `http://` form of the same URL is where the block notice appears — and that is
-the one the tool recognises and reports. See
-[gotchas](../engineering/gotchas.md).
+the one the tool can show you. See [gotchas](../engineering/gotchas.md).

@@ -136,8 +136,9 @@ crate is involved.
 ### A missing text block is an error
 
 A chapter page with no recognizable text container returns
-`SourceError::Parse`, not an empty chapter. Silence there would hide adapter
-rot, and an empty chapter would be cached and never re-fetched.
+`SourceError::NotTheSite`, not an empty chapter — and the fetch layer turns that
+into a report of what actually arrived. Silence there would hide adapter rot, and
+an empty chapter would be cached and never re-fetched.
 
 ## Resume and update
 
