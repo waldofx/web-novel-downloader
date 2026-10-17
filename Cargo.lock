@@ -2160,6 +2160,8 @@ dependencies = [
  "clap",
  "url",
  "wnd-core",
+ "wnd-download",
+ "wnd-export",
  "wnd-sources",
 ]
 
