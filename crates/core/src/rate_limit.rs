@@ -45,6 +45,15 @@ impl RateLimiter {
 
     /// Block until a request to `host` is permitted, then reserve the slot.
     pub fn acquire(&self, host: &str) {
+        self.acquire_with(host, self.min_delay);
+    }
+
+    /// Like [`RateLimiter::acquire`], but reserving `min_delay` for this host
+    /// instead of the limiter's own.
+    ///
+    /// A site can ask for more patience than our policy's default through
+    /// `robots.txt` (`Crawl-delay`); this is how that request is honored.
+    pub fn acquire_with(&self, host: &str, min_delay: Duration) {
         let wait = self.delay_for(host);
         if !wait.is_zero() {
             std::thread::sleep(wait);
@@ -56,7 +65,7 @@ impl RateLimiter {
             .expect("rate limiter lock poisoned");
         let now = Instant::now();
         let base = map.get(host).copied().filter(|at| *at > now).unwrap_or(now);
-        map.insert(host.to_string(), base + self.min_delay);
+        map.insert(host.to_string(), base + min_delay);
     }
 }
 
@@ -87,6 +96,17 @@ mod tests {
         let limiter = RateLimiter::new(Duration::from_secs(30));
         limiter.acquire("slow.example.com");
         assert_eq!(limiter.delay_for("other.example.com"), Duration::ZERO);
+    }
+
+    #[test]
+    fn a_per_call_delay_can_be_longer_than_the_default() {
+        let limiter = RateLimiter::new(Duration::from_secs(1));
+        limiter.acquire_with("example.com", Duration::from_secs(4));
+        let wait = limiter.delay_for("example.com");
+        assert!(
+            wait > Duration::from_secs(2),
+            "the longer per-host delay must be reserved, got {wait:?}"
+        );
     }
 
     #[test]
