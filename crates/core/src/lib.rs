@@ -25,4 +25,4 @@ pub use net::robots::RobotsRules;
 pub use store::model::{
     Block, Chapter, ChapterMeta, ContentRating, FORMAT_VERSION, Inline, Manifest, SourceInfo,
 };
-pub use store::storage::NovelDir;
+pub use store::storage::{NovelDir, Written};

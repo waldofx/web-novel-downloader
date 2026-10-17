@@ -40,6 +40,16 @@ fn to_hex(bytes: &[u8]) -> String {
     })
 }
 
+/// What a write actually produced, so the caller can record it without reading
+/// the file back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Written {
+    /// `sha256:…` over the canonical JSON of what was written.
+    pub hash: String,
+    /// Size of the file on disk, in bytes.
+    pub bytes: u64,
+}
+
 /// A novel directory on disk.
 #[derive(Debug, Clone)]
 pub struct NovelDir {
@@ -107,7 +117,7 @@ impl NovelDir {
 
     pub fn write_manifest(&self, manifest: &Manifest) -> Result<()> {
         fs::create_dir_all(&self.root)?;
-        write_json(&self.manifest_path(), manifest)
+        write_json(&self.manifest_path(), manifest).map(|_| ())
     }
 
     pub fn read_chapter(&self, index: u32) -> Result<Chapter> {
@@ -125,21 +135,50 @@ impl NovelDir {
         Ok(chapter)
     }
 
-    /// Write a chapter and return the hash to store in the manifest.
-    pub fn write_chapter(&self, chapter: &Chapter) -> Result<String> {
+    /// Write a chapter, replacing any previous copy.
+    ///
+    /// The returned [`Written`] carries the hash to record in the manifest and
+    /// the size, so the caller never has to read the file back.
+    pub fn write_chapter(&self, chapter: &Chapter) -> Result<Written> {
         fs::create_dir_all(self.chapters_dir())?;
-        write_json(&self.chapter_path(chapter.index), chapter)?;
-        hash_json(chapter)
+        let bytes = write_json(&self.chapter_path(chapter.index), chapter)?;
+        Ok(Written {
+            hash: hash_json(chapter)?,
+            bytes,
+        })
     }
 }
 
-fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
+/// Write JSON to `path` atomically: a sibling temporary file, then a rename.
+///
+/// An interrupted write leaves either the previous file or the new one, never a
+/// truncated one. `fs::rename` replaces an existing file on Windows as well as
+/// Unix, so one implementation covers both.
+///
+/// Returns the number of bytes written.
+fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<u64> {
     // Pretty-printed: these files are meant to be diffed and read by humans,
     // and they are the input to a translation stage.
     let mut json = serde_json::to_string_pretty(value)?;
     json.push('\n');
-    fs::write(path, json)?;
-    Ok(())
+
+    let temporary = temporary_path(path);
+    if let Err(error) = fs::write(&temporary, json.as_bytes()) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    if let Err(error) = fs::rename(&temporary, path) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    Ok(json.len() as u64)
+}
+
+/// `<path>.tmp`, a sibling of the target so the rename stays on one filesystem.
+fn temporary_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".tmp");
+    PathBuf::from(name)
 }
 
 #[cfg(test)]
@@ -199,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn chapter_hash_is_stable_and_content_sensitive() {
+    fn write_chapter_reports_the_hash_and_the_size() {
         let dir = temp_novel("hash");
         dir.ensure_layout().unwrap();
 
@@ -211,19 +250,63 @@ mod tests {
         });
 
         let first = dir.write_chapter(&chapter).unwrap();
-        assert!(first.starts_with("sha256:"));
+        assert!(first.hash.starts_with("sha256:"));
+        assert_eq!(
+            first.bytes,
+            fs::metadata(dir.chapter_path(1)).unwrap().len(),
+            "the reported size must be the size of the file on disk"
+        );
         assert!(dir.has_chapter(1));
 
         // Same content -> same hash, so a re-fetch can be skipped.
         let second = dir.write_chapter(&chapter).unwrap();
-        assert_eq!(first, second);
+        assert_eq!(first.hash, second.hash);
 
         // Changed content -> changed hash, so update tracking notices.
         chapter.nodes.push(Block::SceneBreak);
         let third = dir.write_chapter(&chapter).unwrap();
-        assert_ne!(first, third);
+        assert_ne!(first.hash, third.hash);
 
         assert_eq!(dir.read_chapter(1).unwrap(), chapter);
+
+        fs::remove_dir_all(dir.root()).ok();
+    }
+
+    #[test]
+    fn writes_replace_in_place_and_leave_no_temporary_files() {
+        let dir = temp_novel("atomic");
+        dir.ensure_layout().unwrap();
+
+        let mut chapter = Chapter::new(1, "first");
+        dir.write_chapter(&chapter).unwrap();
+        chapter.title = "second".into();
+        dir.write_chapter(&chapter).unwrap();
+        assert_eq!(dir.read_chapter(1).unwrap().title, "second");
+
+        let mut manifest = Manifest::new(
+            SourceInfo {
+                id: "fake".into(),
+                novel_url: "https://example.test/1/".into(),
+                site_title: None,
+            },
+            "テスト",
+            "ja",
+        );
+        dir.write_manifest(&manifest).unwrap();
+        manifest.title = "二度目".into();
+        dir.write_manifest(&manifest).unwrap();
+        assert_eq!(dir.read_manifest().unwrap().title, "二度目");
+
+        for checked in [dir.chapters_dir(), dir.root().to_path_buf()] {
+            let names: Vec<String> = fs::read_dir(&checked)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+            assert!(
+                names.iter().all(|name| !name.ends_with(".tmp")),
+                "no temporary file may survive a completed write: {names:?}"
+            );
+        }
 
         fs::remove_dir_all(dir.root()).ok();
     }
