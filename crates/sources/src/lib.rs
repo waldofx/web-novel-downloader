@@ -15,6 +15,11 @@
 //! inline markup (`<ruby>`, `<strong>`, `<a>`), and [`selectors`] holds the
 //! macro that keeps a selector literal out of the request path. An adapter
 //! supplies only what is peculiar to its site.
+//!
+//! When the shape an adapter needs is not there at all, the parser says so with
+//! [`SourceError::NotTheSite`] and the adapter's `novel`/`chapter` asks the fetch
+//! layer what actually answered ([`SourceError::with_evidence`]). Nothing in
+//! either crate matches block-page text: the page is quoted, not recognised.
 
 pub mod kakuyomu;
 pub mod narou;
@@ -31,7 +36,7 @@ use crate::kakuyomu::Kakuyomu;
 use crate::narou::Narou;
 use url::Url;
 use wnd_core::HttpClient;
-use wnd_core::{Chapter, ChapterMeta, ContentRating, Manifest};
+use wnd_core::{Chapter, ChapterMeta, ContentRating, Manifest, Page};
 
 /// A website we can download novels from.
 pub trait Source: Send + Sync {
@@ -81,6 +86,17 @@ pub enum SourceError {
     #[error("could not parse {url}: {message}")]
     Parse { url: String, message: String },
 
+    /// The page that arrived is not this site's shape at all.
+    ///
+    /// Either something else answered in the site's place — a filter, a captive
+    /// portal, a proxy — or the site has changed its markup. A parser raises this
+    /// without the evidence, because a parser is a pure function over a body; the
+    /// caller that has the [`Page`] turns it into what the user reads with
+    /// [`SourceError::with_evidence`]. `expected` names what was being looked for,
+    /// article included: `a table of contents`, `an episode body`.
+    #[error("the page that arrived is not a novel page: {expected} was expected")]
+    NotTheSite { url: String, expected: String },
+
     #[error(transparent)]
     Core(#[from] wnd_core::Error),
 
@@ -88,9 +104,106 @@ pub enum SourceError {
     Other(String),
 }
 
+impl SourceError {
+    /// Give a [`SourceError::NotTheSite`] the evidence the page carries.
+    ///
+    /// Called from an adapter's `novel` and `chapter`, the two places where the
+    /// page and the client are both in hand:
+    ///
+    /// ```ignore
+    /// parse(&page.body, meta).map_err(|error| error.with_evidence(fetch, &page))
+    /// ```
+    ///
+    /// Anything that is not a `NotTheSite` is passed through untouched, so this
+    /// can wrap a whole parse call. The host probe runs from here — once, on the
+    /// failure path — because the caller is what knows the page should have been
+    /// the site.
+    pub fn with_evidence(self, fetch: &HttpClient, page: &Page) -> Self {
+        match self {
+            Self::NotTheSite { url, expected } => Self::Core(page.not_the_site(
+                &expected,
+                fetch.answers_every_url_the_same(&url, &page.body),
+            )),
+            other => other,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wnd_core::{BlockKind, Error, FetchPolicy, Page};
+
+    /// A page that is not the site, with the facts a real fetch attaches.
+    fn unexpected_page() -> Page {
+        Page {
+            status: 200,
+            url: "http://127.0.0.1:1/chapter".to_string(),
+            final_url: "http://127.0.0.1:1/chapter".to_string(),
+            content_type: Some("text/html; charset=utf-8".to_string()),
+            body: "<html><body><h1>BU SİTEYE ERİŞİM ENGELLENMİŞTİR</h1></body></html>".to_string(),
+        }
+    }
+
+    /// A client for a port with nothing behind it: the host probe fails at once,
+    /// which is what a test wants. Proving the probe itself is `crates/core`'s
+    /// job, not this crate's.
+    fn client() -> HttpClient {
+        HttpClient::new(FetchPolicy {
+            respect_robots: false,
+            min_delay: std::time::Duration::ZERO,
+            max_retries: 1,
+            ..FetchPolicy::default()
+        })
+        .expect("a client")
+    }
+
+    #[test]
+    fn a_not_the_site_failure_gets_the_evidence_the_page_carries() {
+        let page = unexpected_page();
+        let error = SourceError::NotTheSite {
+            url: page.url.clone(),
+            expected: "a table of contents".to_string(),
+        }
+        .with_evidence(&client(), &page);
+
+        match error {
+            SourceError::Core(Error::Blocked {
+                status,
+                kind,
+                evidence,
+                ..
+            }) => {
+                assert_eq!(status, 200, "the filter says 200, and so do we");
+                assert_eq!(kind, BlockKind::NotANovelPage);
+                assert!(
+                    evidence.contains("a table of contents was expected"),
+                    "got: {evidence}"
+                );
+                assert!(
+                    evidence.contains("BU SİTEYE ERİŞİM ENGELLENMİŞTİR"),
+                    "the page's own words are the evidence: {evidence}"
+                );
+                assert!(
+                    !evidence.contains("cannot exist"),
+                    "a host that was never reached has not been shown to intercept: {evidence}"
+                );
+            }
+            other => panic!("expected a reported page, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn every_other_failure_is_passed_through_untouched() {
+        let page = unexpected_page();
+
+        let error = SourceError::NotImplemented.with_evidence(&client(), &page);
+
+        assert!(
+            matches!(error, SourceError::NotImplemented),
+            "only a page that is not the site is enriched: {error:?}"
+        );
+    }
 
     #[test]
     fn registry_routes_japanese_novel_sites() {

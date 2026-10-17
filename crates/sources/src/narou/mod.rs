@@ -17,8 +17,9 @@
 //!
 //! - Narou indents with U+3000. That is content, so every trim is ASCII-only.
 //! - A `｜` or `《` with no usable base stays literal rather than being dropped.
-//! - A chapter page with no text container is a parse error, not an empty
-//!   chapter — silence there would hide adapter rot.
+//! - A chapter page with no text container is not an empty chapter: it is a page
+//!   that is not this site, and it is reported as one — silence there would hide
+//!   adapter rot *and* a block page.
 
 mod chapter;
 mod inline;
@@ -119,23 +120,34 @@ impl Source for Narou {
             if !visited.insert(page_url.clone()) || visited.len() > MAX_TOC_PAGES {
                 break;
             }
-            let html = fetch.get_text(&page_url)?;
+            let page = fetch.get_page(&page_url)?;
             let page_base = Url::parse(&page_url).unwrap_or_else(|_| base.clone());
-            let page = parse_toc_page(&html, &page_base, arc, index);
+            let parsed = parse_toc_page(&page.body, &page_base, arc, index);
 
-            title = title.or(page.title);
-            author = author.or(page.author);
-            synopsis = synopsis.or(page.synopsis);
-            arc = page.end_arc;
-            index = page.end_index;
-            chapters.extend(page.entries);
-            next = page.next_page;
+            // The novel's own title is on the first page. Its absence is not a
+            // parse of this site's table of contents at all: it is a page that is
+            // not this site, and saying so here is what keeps a block page from
+            // being read as an empty novel.
+            if title.is_none() && parsed.title.is_none() {
+                return Err(SourceError::NotTheSite {
+                    url: page_url,
+                    expected: "a table of contents".to_string(),
+                }
+                .with_evidence(fetch, &page));
+            }
+
+            title = title.or(parsed.title);
+            author = author.or(parsed.author);
+            synopsis = synopsis.or(parsed.synopsis);
+            arc = parsed.end_arc;
+            index = parsed.end_index;
+            chapters.extend(parsed.entries);
+            next = parsed.next_page;
         }
 
-        let title = title.ok_or_else(|| SourceError::Parse {
-            url: base.to_string(),
-            message: "no novel title found; is this a Narou table of contents?".to_string(),
-        })?;
+        // The first page always runs above, and a page with no title returned
+        // early, so there is a title by now.
+        let title = title.expect("the first table-of-contents page was checked above");
 
         let mut manifest = Manifest::new(
             SourceInfo {
@@ -154,8 +166,8 @@ impl Source for Narou {
     }
 
     fn chapter(&self, fetch: &HttpClient, meta: &ChapterMeta) -> Result<Chapter, SourceError> {
-        let html = fetch.get_text(&meta.url)?;
-        chapter::parse_chapter(&html, meta)
+        let page = fetch.get_page(&meta.url)?;
+        chapter::parse_chapter(&page.body, meta).map_err(|error| error.with_evidence(fetch, &page))
     }
 }
 
