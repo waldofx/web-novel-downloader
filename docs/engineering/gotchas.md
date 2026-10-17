@@ -49,6 +49,8 @@ version away from coming back, and the next person will search for the *symptom*
 | `if let Some(x) = a && b` compiles locally but not for someone on the stated MSRV | let-chains are Rust **1.88**; this workspace claims `rust-version = "1.85"` | Chain with combinators instead — `a.as_ref().filter(\|x\| b)` — or nest the `if`. Do not "fix" it by raising `rust-version` without a decision |
 | `writeln!(s, …)` on a `String` will not compile, or adding `use std::io::Write` breaks `write_all` | both traits are named `Write`, and `writeln!` needs the `std::fmt` one while `write_all` needs the `std::io` one | Import both anonymously: `use std::fmt::Write as _;` and `use std::io::Write as _;` |
 | A dependency build pulls in a C toolchain, or is far slower to compile than expected | `zip`'s **default features** enable zopfli (optimal but slow), plus lzma, bzip2, zstd and AES | Depend on the slice you need: `zip = { version = "7", default-features = false, features = ["deflate-flate2"] }` — pure Rust, sane speed |
+| Testing the CLI looks like it needs `assert_cmd`/`escargot` | Cargo already tells an integration test where its own binary is | `env!("CARGO_BIN_EXE_nvd")` in `crates/cli/tests/cli.rs`. `Command::output()` also captures raw UTF-8 bytes, which sidesteps the console-encoding trouble described above |
+| A CLI test asserts "non-zero" and gets `2` | `clap` exits `2` for a usage error before your code runs | Assert `2` for a rejected flag or value and `1` for an application failure. Collapsing them into "non-zero" would hide a broken argument definition |
 
 ## Format and storage
 

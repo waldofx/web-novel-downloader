@@ -144,7 +144,7 @@ user's problem.
 | --- | --- | --- |
 | **M0** | repo, design docs, source roadmap | done |
 | **M1** | `core`: model, storage, fetch policy, rate limiter, robots | done |
-| **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | adapter, orchestrator and exports done; CLI wiring next |
+| **M2** | **Narou** adapter (`ncode` + `novel18`), orchestrator, EPUB/TXT/MD export, CLI wiring | done — `nvd download` and `nvd export` work end to end |
 | **M3** | **Kakuyomu** adapter | — |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | — |
 | **M5** | **Pixiv** (cookie-based auth) | — |

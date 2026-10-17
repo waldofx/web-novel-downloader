@@ -9,9 +9,11 @@ feed the EPUB / TXT / Markdown exporters.
 
 ## Status
 
-Early, and **not usable yet**. The fetch layer, the Narou adapter, the download
-orchestrator and the exporters are implemented and tested; only the CLI wiring is
-left. `nvd info` is the one command that does anything today.
+Early, and **working end to end for Narou**. `nvd download` fetches a novel and
+its chapters into a structured directory, `nvd export` turns one into EPUB, TXT or
+Markdown, and `nvd info` describes a directory you already have. `nvd update` is
+not implemented yet; other sources are next — see the
+[roadmap](docs/engineering/architecture.md#roadmap).
 
 | | |
 | --- | --- |
@@ -24,13 +26,15 @@ left. `nvd info` is the one command that does anything today.
 ## Usage
 
 ```bash
-nvd download <novel-url> --out ./my-novel   # fetch a whole novel
-nvd info ./my-novel                         # what is in the directory
-nvd update ./my-novel                       # only new or changed chapters
-nvd export ./my-novel --format epub         # epub, txt, or md
+nvd download <novel-url> --out ./my-novel     # fetch a novel and its chapters
+nvd download <url> --out ./d --format epub    # ...and produce an epub in one go
+nvd info ./my-novel                           # what is in the directory
+nvd export ./my-novel --format epub,txt,md    # epub, txt, or md
+nvd update ./my-novel                         # only new or changed chapters (not yet)
 ```
 
-Only `info` works so far — see [getting started](docs/guide/getting-started.md).
+Run `nvd <command> --help` for the flags, or read
+[getting started](docs/guide/getting-started.md).
 
 ## Format at a glance
 

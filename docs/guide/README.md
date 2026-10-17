@@ -14,9 +14,8 @@ keeping the formatting that makes it readable:
   author put them;
 - **illustrations** come along too.
 
-It saves into a folder you own, and from there can produce an **EPUB** for an
-e-reader, plain **TXT**, or **Markdown**. (The exporters work today; the command
-that runs them is still to come — see [getting started](getting-started.md).)
+It saves into a folder you own, and from there produces an **EPUB** for an
+e-reader, plain **TXT**, or **Markdown**.
 
 ## Why not just use a browser extension?
 
@@ -29,10 +28,8 @@ destroying the furigana and the layout.
 
 - **Slowly and politely.** It waits between requests, says who it is, and
   respects a site's `robots.txt`. It is not a scraper that hammers a server.
-- **Resumable.** If you stop it, or the connection drops, run it again — it
-  re-reads the chapter list and fetches only what is missing. (The engine does
-  this today; the command that drives it is still to come — see
-  [getting started](getting-started.md).)
+- **Resumable.** If you stop it, or the connection drops, run the same command
+  again — it re-reads the chapter list and fetches only what is missing.
 - **Honest about content.** Adult sources are never fetched unless you
   explicitly ask for them.
 
