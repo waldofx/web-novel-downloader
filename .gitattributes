@@ -1,0 +1,16 @@
+# Normalize line endings: LF in the repository and in the working tree,
+# so Windows CRLF warnings never appear again.
+* text=auto eol=lf
+
+# Windows-native scripts stay CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files must never be touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.epub binary
+*.zip binary
