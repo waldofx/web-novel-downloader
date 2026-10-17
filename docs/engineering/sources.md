@@ -102,12 +102,6 @@ per-host override is needed.
 
 - **Illustrations inside a body are skipped** (issue #18 owns images: fetching
   them, storing them, resolving URLs).
-- **The catchphrase, the cover image URL, and the content flags are dropped**
-  (issue #22), because `Manifest` has no field for them and `cover` is defined as
-  a path to a *fetched* image. The fields themselves are additive and optional, so
-  they do not need a `FORMAT_VERSION` bump (see
-  [format.md](format.md#manifestjson)); what makes this its own issue is that a
-  cover has to be drawn and stored before it can be named.
 - **Paywalled episodes** (Kakuyomu Pay) would surface as a parse error rather
   than a partial chapter. No work tested has one.
 

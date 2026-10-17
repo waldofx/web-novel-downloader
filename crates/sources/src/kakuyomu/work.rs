@@ -32,6 +32,9 @@ pub(super) struct WorkPage {
     pub(super) synopsis: Option<String>,
     pub(super) tags: Vec<String>,
     pub(super) chapters: Vec<ChapterMeta>,
+    pub(super) catchphrase: Option<String>,
+    pub(super) cover_url: Option<String>,
+    pub(super) warnings: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,12 +42,22 @@ struct Work {
     title: String,
     #[serde(default)]
     introduction: Option<String>,
+    #[serde(default)]
+    catchphrase: Option<String>,
     #[serde(rename = "tagLabels", default)]
     tags: Vec<String>,
     #[serde(default)]
     author: Option<Reference>,
     #[serde(rename = "tableOfContentsV2", default)]
     contents: Vec<Reference>,
+    #[serde(rename = "adminCoverImageUrl", default)]
+    admin_cover_image_url: Option<String>,
+    #[serde(rename = "isSexual", default)]
+    is_sexual: bool,
+    #[serde(rename = "isViolent", default)]
+    is_violent: bool,
+    #[serde(rename = "isCruel", default)]
+    is_cruel: bool,
 }
 
 /// A chapter of the table of contents: an arc name, and the episodes under it.
@@ -95,6 +108,9 @@ pub(super) fn parse(apollo: &Apollo, work_id: &str, base: &Url) -> Result<WorkPa
         tags: work.tags.clone(),
         chapters: chapters_of(apollo, &work, base)?,
         title: work.title.clone(),
+        catchphrase: work.catchphrase.clone(),
+        cover_url: work.admin_cover_image_url.clone(),
+        warnings: warnings_of(&work),
     })
 }
 
@@ -103,11 +119,23 @@ fn author_of(apollo: &Apollo, work: &Work) -> Option<String> {
     user.activity_name
 }
 
+/// Content warnings the work publishes, in the order the flags are listed.
+fn warnings_of(work: &Work) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if work.is_sexual {
+        warnings.push("sexual".to_string());
+    }
+    if work.is_violent {
+        warnings.push("violent".to_string());
+    }
+    if work.is_cruel {
+        warnings.push("cruel".to_string());
+    }
+    warnings
+}
+
 /// The introduction, with the same treatment a page's text block gets: each line
 /// trimmed of ASCII padding and blank lines dropped from the ends.
-///
-/// The work also carries a one-line `catchphrase`, which the manifest has no
-/// field for; see `docs/engineering/sources.md`.
 fn synopsis_of(work: &Work) -> Option<String> {
     let text = lines_trimmed(work.introduction.as_deref()?);
     (!text.is_empty()).then_some(text)
@@ -263,6 +291,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_work_page_carries_its_catchphrase_cover_url_and_warnings() {
+        let page = parsed(KAKUYOMU_WORK_ARCS, ARCS);
+
+        assert_eq!(
+            page.catchphrase.as_deref(),
+            Some("クズでゲスな悪役親友役として、転生してしまいました…。1200万PV！")
+        );
+        assert_eq!(page.cover_url, None, "this work has no admin cover");
+        assert_eq!(page.warnings, vec!["sexual", "violent", "cruel"]);
+    }
     #[test]
     fn a_work_without_arcs_gets_one_unnamed_group() {
         let page = parsed(KAKUYOMU_WORK_FLAT, FLAT);

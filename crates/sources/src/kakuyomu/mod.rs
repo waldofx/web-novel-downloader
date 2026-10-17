@@ -118,6 +118,9 @@ impl Source for Kakuyomu {
         manifest.tags = page.tags;
         manifest.content_rating = self.content_rating();
         manifest.chapters = page.chapters;
+        manifest.catchphrase = page.catchphrase;
+        manifest.cover_url = page.cover_url;
+        manifest.warnings = page.warnings;
         Ok(manifest)
     }
 
