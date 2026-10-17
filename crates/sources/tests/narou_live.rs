@@ -1,20 +1,18 @@
-//! Network tests for the adapters. They are `#[ignore]`d because a test suite
-//! must not depend on someone else's server being reachable — or on it
+//! Network tests for the Narou adapter. They are `#[ignore]`d because a test
+//! suite must not depend on someone else's server being reachable — or on it
 //! tolerating us.
 //!
 //! Run them explicitly:
 //!
 //! ```text
-//! cargo test -p wnd-sources --test live -- --ignored --nocapture
+//! cargo test -p wnd-sources --test narou_live -- --ignored --nocapture
 //! ```
 
-use url::Url;
-use wnd_core::{ContentRating, FetchPolicy, HttpClient};
-use wnd_sources::{find, registry};
+mod common;
 
-fn client() -> HttpClient {
-    HttpClient::new(FetchPolicy::default()).expect("client")
-}
+use url::Url;
+use wnd_core::ContentRating;
+use wnd_sources::{find, registry};
 
 #[test]
 #[ignore = "hits the network"]
@@ -22,7 +20,7 @@ fn narou_multi_chapter_novel_lists_every_chapter_and_arc() {
     let target = Url::parse("https://ncode.syosetu.com/n0608gd/").unwrap();
     let sources = registry();
     let source = find(&sources, &target).expect("narou adapter handles this");
-    let client = client();
+    let client = common::client();
 
     let manifest = source.novel(&client, &target).expect("table of contents");
 
@@ -66,7 +64,7 @@ fn narou_single_chapter_novel_is_read_from_its_table_of_contents() {
     let target = Url::parse("https://ncode.syosetu.com/n5589cg/").unwrap();
     let sources = registry();
     let source = find(&sources, &target).expect("narou adapter handles this");
-    let client = client();
+    let client = common::client();
 
     let manifest = source.novel(&client, &target).expect("table of contents");
     println!("title: {}", manifest.title);
