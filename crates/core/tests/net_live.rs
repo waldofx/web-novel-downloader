@@ -1,21 +1,22 @@
-//! Tests that touch the network. They are `#[ignore]`d because a test suite
+//! Network tests for the fetch layer. They are `#[ignore]`d because a test suite
 //! must not depend on someone else's server being reachable — or on it
 //! tolerating us.
 //!
 //! Run them explicitly:
 //!
 //! ```text
-//! cargo test -p wnd-core --test live -- --ignored --nocapture
+//! cargo test -p wnd-core --test net_live -- --ignored --nocapture
 //! ```
 
+mod common;
+
 use std::time::{Duration, Instant};
-use wnd_core::{Error, FetchPolicy, HttpClient, RobotsRules};
+use wnd_core::{Error, FetchPolicy, RobotsRules};
 
 #[test]
 #[ignore = "hits the network"]
 fn a_real_narou_page_is_fetched_and_decoded() {
-    let client = HttpClient::new(FetchPolicy::default()).expect("client");
-    let body = client
+    let body = common::client()
         .get_text("https://ncode.syosetu.com/n5589cg/")
         .expect("narou page");
 
@@ -33,8 +34,7 @@ fn a_real_narou_page_is_fetched_and_decoded() {
 #[test]
 #[ignore = "hits the network"]
 fn narou_robots_txt_parses_and_permits_novel_pages() {
-    let client = HttpClient::new(FetchPolicy::default()).expect("client");
-    let body = client
+    let body = common::client()
         .get_text("https://ncode.syosetu.com/robots.txt")
         .expect("robots.txt");
     let rules = RobotsRules::parse(&body);
@@ -50,9 +50,8 @@ fn narou_robots_txt_parses_and_permits_novel_pages() {
 #[test]
 #[ignore = "hits the network"]
 fn a_missing_page_is_an_error_and_is_not_retried() {
-    let client = HttpClient::new(FetchPolicy::default()).expect("client");
     let started = Instant::now();
-    let error = client
+    let error = common::client()
         .get_text("https://ncode.syosetu.com/n0000zz/")
         .expect_err("a nonexistent novel must not succeed");
 

@@ -12,7 +12,7 @@
 //! ```
 
 use crate::error::{Error, Result};
-use crate::model::{Chapter, FORMAT_VERSION, Manifest};
+use crate::store::model::{Chapter, FORMAT_VERSION, Manifest};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -145,7 +145,7 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Block, ContentRating, Inline, SourceInfo};
+    use crate::store::model::{Block, ContentRating, Inline, SourceInfo};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_novel(tag: &str) -> NovelDir {
