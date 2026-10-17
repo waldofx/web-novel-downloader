@@ -1,15 +1,22 @@
 //! Site adapters.
 //!
-//! Each site (or family of sites sharing a platform) gets one small module
-//! implementing [`Source`]. Adapters rot as sites change their HTML, so they are
-//! kept small, isolated, and testable against saved fixtures.
+//! Each site (or family of sites sharing a platform) gets one module —
+//! a folder, once it has enough parts to need one — implementing [`Source`].
+//! Adapters rot as sites change their HTML, so they are kept small, isolated,
+//! and tested against captured pages in `tests/fixtures/`.
+//!
+//! - [`narou`] — `ncode.syosetu.com` and its R18 sibling `novel18.syosetu.com`,
+//!   split into table-of-contents, chapter, inline, and DOM parts.
 
 pub mod narou;
+
+#[cfg(test)]
+mod fixtures;
 
 use crate::narou::Narou;
 use url::Url;
 use wnd_core::HttpClient;
-use wnd_core::model::{Chapter, ChapterMeta, ContentRating, Manifest};
+use wnd_core::{Chapter, ChapterMeta, ContentRating, Manifest};
 
 /// A website we can download novels from.
 pub trait Source: Send + Sync {
