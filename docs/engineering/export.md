@@ -191,7 +191,7 @@ An EPUB is a ZIP with rules. In the order they are written:
 | `OEBPS/style.css` | one small stylesheet, embedded rather than linked |
 | `OEBPS/images/…` | the images, **copied byte for byte** — never re-encoded |
 | `OEBPS/text/NNNN.xhtml` | one document per chapter, numbered from the chapter index |
-| `OEBPS/nav.xhtml` | the navigation document (the table of contents) |
+| `OEBPS/nav.xhtml` | the navigation document (the table of contents), with chapters nested under their arcs |
 | `OEBPS/content.opf` | the package: metadata, manifest, spine |
 
 Decisions inside the package document:
@@ -210,6 +210,15 @@ Decisions inside the package document:
 - Paragraph line breaks (`<br />`): a synopsis keeps its line structure as
   newlines, and a newline is whitespace in XHTML. Without this, lines would run
   together.
+- **Arcs group chapters**, in the navigation and in the text. A chapter that
+  belongs to an arc is nested inside it in `nav.xhtml`: the arc is a list item
+  whose heading is a `<span>` — there is no page to link to, it is a divider —
+  and its chapters are the nested `<ol>`. A chapter in no arc stays a direct
+  child, so a novel without arcs exports exactly as it did before arcs existed.
+  In the chapter document the arc is a `<p class="arc">` divider, printed on the
+  first chapter of the arc and **only** there: the same rule TXT and Markdown
+  follow, for the same reason. A chapter document cannot work that out alone, so
+  `epub::write` narrows the divider while it walks the chapters in reading order.
 
 ### Images
 

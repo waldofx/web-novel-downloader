@@ -539,6 +539,133 @@ fn the_epub_lists_every_chapter_in_its_navigation() {
     assert!(nav.contains("<a href=\"text/0002.xhtml\">第2話　日本</a>"));
 }
 
+/// A four-chapter novel in two arcs, with one chapter that belongs to neither —
+/// the shape an author gets by adding a chapter without a divider above it.
+fn arc_fixture(tag: &str) -> (TempDir, NovelDir) {
+    let dir = TempDir::new(tag);
+    let novel = NovelDir::at(dir.path());
+    novel.ensure_layout().unwrap();
+
+    let mut manifest = Manifest::new(
+        SourceInfo {
+            id: "fake".to_string(),
+            novel_url: NOVEL_URL.to_string(),
+            site_title: None,
+        },
+        "四章構成",
+        "ja",
+    );
+    manifest.chapters = vec![
+        meta(1, "第1話", Some("第一章　出発")),
+        meta(2, "第2話", Some("第一章　出発")),
+        meta(3, "第3話", None),
+        meta(4, "第4話", Some("第二章　帰還")),
+    ];
+    novel.write_manifest(&manifest).unwrap();
+
+    for index in 1..=4 {
+        let mut chapter = Chapter::new(index, format!("第{index}話"));
+        chapter.nodes.push(Block::Paragraph {
+            children: vec![text(&format!("　{index}話目の本文。"))],
+        });
+        novel.write_chapter(&chapter).unwrap();
+    }
+    (dir, novel)
+}
+
+#[test]
+fn the_epub_navigation_nests_chapters_under_their_arc() {
+    let (_guard, novel) = fixture("epub-nav-arcs");
+    let summary = export(&novel, Format::Epub, &ExportOptions::default()).unwrap();
+
+    let nav = entry(&summary.path, "OEBPS/nav.xhtml");
+    let expected = "\
+<ol>
+<li><span>第一章　勇者、日本に帰る</span>
+<ol>
+<li><a href=\"text/0001.xhtml\">第1話　勇者の帰還</a></li>
+<li><a href=\"text/0002.xhtml\">第2話　日本</a></li>
+</ol>
+</li>
+</ol>
+";
+    assert!(
+        nav.contains(expected),
+        "a reader's table of contents must show the arc, not a flat list of chapters:\n{nav}"
+    );
+}
+
+#[test]
+fn the_epub_navigation_shows_an_arc_beside_a_chapter_that_is_in_no_arc() {
+    let (_guard, novel) = arc_fixture("epub-nav-mixed");
+    let summary = export(&novel, Format::Epub, &ExportOptions::default()).unwrap();
+
+    let nav = entry(&summary.path, "OEBPS/nav.xhtml");
+    let expected = "\
+<ol>
+<li><span>第一章　出発</span>
+<ol>
+<li><a href=\"text/0001.xhtml\">第1話</a></li>
+<li><a href=\"text/0002.xhtml\">第2話</a></li>
+</ol>
+</li>
+<li><a href=\"text/0003.xhtml\">第3話</a></li>
+<li><span>第二章　帰還</span>
+<ol>
+<li><a href=\"text/0004.xhtml\">第4話</a></li>
+</ol>
+</li>
+</ol>
+";
+    assert!(
+        nav.contains(expected),
+        "the loose chapter belongs to no arc and must not be filed under one:\n{nav}"
+    );
+}
+
+#[test]
+fn a_novel_without_arcs_has_a_flat_navigation() {
+    let (_guard, novel) = minimal("epub-nav-flat", "アーク無し");
+    let summary = export(&novel, Format::Epub, &ExportOptions::default()).unwrap();
+
+    let nav = entry(&summary.path, "OEBPS/nav.xhtml");
+    assert!(nav.contains("<ol>\n<li><a href=\"text/0001.xhtml\">第1話</a></li>\n</ol>"));
+    assert!(
+        !nav.contains("<span>"),
+        "there is no arc to group by, so nothing may be invented:\n{nav}"
+    );
+}
+
+#[test]
+fn a_chapter_document_marks_where_its_arc_begins_and_not_again() {
+    let (_guard, novel) = arc_fixture("epub-arc-divider");
+    let summary = export(&novel, Format::Epub, &ExportOptions::default()).unwrap();
+
+    let chapter = |index: u32| entry(&summary.path, &format!("OEBPS/text/{index:04}.xhtml"));
+
+    assert!(
+        chapter(1).contains("第一章　出発"),
+        "the first chapter of an arc carries the divider:\n{}",
+        chapter(1)
+    );
+    assert!(
+        !chapter(2).contains("第一章　出発"),
+        "the divider belongs above the first chapter of the arc and only there, \
+         the same rule TXT and Markdown follow:\n{}",
+        chapter(2)
+    );
+    assert!(
+        !chapter(3).contains("第一章"),
+        "a chapter in no arc carries no divider:\n{}",
+        chapter(3)
+    );
+    assert!(
+        chapter(4).contains("第二章　帰還"),
+        "the second arc gets its own divider:\n{}",
+        chapter(4)
+    );
+}
+
 #[test]
 fn the_epub_carries_the_cover_and_the_illustrations() {
     let (_guard, novel) = fixture("epub-images");
