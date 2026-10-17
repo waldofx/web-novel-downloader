@@ -2169,6 +2169,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wnd-download"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "url",
+ "wnd-core",
+ "wnd-sources",
+]
+
+[[package]]
 name = "wnd-sources"
 version = "0.1.0"
 dependencies = [
