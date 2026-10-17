@@ -1,17 +1,26 @@
-# Dependencies
-node_modules/
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
 
-# Environment variables
+# Generated exports (always regenerable from canonical chapter data)
+exports/
+raw/
+
+# Local test fixtures (may contain personal reading lists / adult titles)
+fixtures.local.json
+
+# Secrets and sessions — never commit these
 .env
 .env.local
-
-# Build output
-dist/
-build/
-
-# Logs
-*.log
+cookies.json
+**/cookies/*.json
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
