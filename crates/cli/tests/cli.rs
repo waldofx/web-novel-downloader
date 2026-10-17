@@ -1,0 +1,233 @@
+//! The `nvd` binary, driven as a user would drive it.
+//!
+//! These run the real executable, so they cover the parts the library tests
+//! cannot: argument parsing, exit codes, which stream output goes to, and the
+//! wording a user actually sees. Nothing here needs the network — the one test
+//! that does is `#[ignore]`d.
+
+mod common;
+
+use std::fs;
+
+use common::{TempDir, exported, novel, nvd, stderr, stdout};
+
+#[test]
+fn info_describes_a_downloaded_directory() {
+    let (_guard, novel) = novel("info");
+
+    let output = nvd(&["info", novel.root().to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("偽の小説"), "got:\n{text}");
+    assert!(text.contains("author:   著者"), "got:\n{text}");
+    assert!(text.contains("chapters: 2"), "got:\n{text}");
+}
+
+#[test]
+fn export_writes_the_requested_formats() {
+    let (_guard, novel) = novel("export");
+
+    let output = nvd(&[
+        "export",
+        novel.root().to_str().unwrap(),
+        "--format",
+        "txt,md",
+    ]);
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert_eq!(
+        exported(novel.root(), "txt"),
+        novel.exports_dir().join("偽の小説.txt")
+    );
+    assert_eq!(
+        exported(novel.root(), "md"),
+        novel.exports_dir().join("偽の小説.md")
+    );
+
+    // The result goes to stdout, so it can be captured.
+    let text = stdout(&output);
+    assert!(text.contains("偽の小説.txt"), "got:\n{text}");
+    assert!(text.contains("偽の小説.md"), "got:\n{text}");
+    assert!(text.contains("2 chapters"), "got:\n{text}");
+}
+
+#[test]
+fn export_defaults_to_epub() {
+    let (_guard, novel) = novel("export-default");
+
+    let output = nvd(&["export", novel.root().to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let epub = exported(novel.root(), "epub");
+    assert!(
+        !fs::read(&epub).unwrap().is_empty(),
+        "the epub must not be empty"
+    );
+}
+
+#[test]
+fn a_directory_that_is_not_a_novel_is_an_error() {
+    let guard = TempDir::new("not-a-novel");
+    let dir = guard.path().to_str().unwrap();
+
+    let output = nvd(&["export", dir, "--format", "txt"]);
+
+    assert_eq!(output.status.code(), Some(1), "a failure must not exit 0");
+    // The message names the directory that was tried, not just "file not found".
+    assert!(stderr(&output).contains(dir), "got:\n{}", stderr(&output));
+    assert!(stdout(&output).is_empty(), "nothing was produced");
+}
+
+#[test]
+fn an_unknown_format_is_a_usage_error() {
+    let (_guard, novel) = novel("bad-format");
+
+    let output = nvd(&["export", novel.root().to_str().unwrap(), "--format", "pdf"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "clap reports usage errors as 2"
+    );
+    assert!(stderr(&output).contains("pdf"), "got:\n{}", stderr(&output));
+}
+
+#[test]
+fn a_url_no_adapter_claims_fails_and_names_the_url() {
+    let guard = TempDir::new("unsupported");
+    let out = guard.path().join("novel");
+    let url = "https://example.invalid/novel/1";
+
+    let output = nvd(&["download", url, "--out", out.to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let text = stderr(&output);
+    assert!(text.contains(url), "the error must name the URL:\n{text}");
+    assert!(
+        !text.contains("panicked") && !text.contains("RUST_BACKTRACE"),
+        "no backtraces:\n{text}"
+    );
+    assert!(
+        !out.exists(),
+        "a refused download leaves no directory behind"
+    );
+}
+
+#[test]
+fn no_robots_is_announced_out_loud() {
+    let guard = TempDir::new("no-robots");
+    let out = guard.path().join("novel");
+
+    let output = nvd(&[
+        "download",
+        "https://example.invalid/novel/1",
+        "--out",
+        out.to_str().unwrap(),
+        "--no-robots",
+    ]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("robots.txt is being ignored"),
+        "overriding a site's wishes must not be silent:\n{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn help_lists_every_command() {
+    let output = nvd(&["--help"]);
+
+    assert_eq!(output.status.code(), Some(0));
+    let text = stdout(&output);
+    for command in ["download", "update", "export", "info"] {
+        assert!(
+            text.contains(command),
+            "help should mention {command}:\n{text}"
+        );
+    }
+}
+
+#[test]
+fn update_reports_that_it_is_not_implemented() {
+    let (_guard, novel) = novel("update");
+
+    let output = nvd(&["update", novel.root().to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("not implemented"));
+}
+
+/// The whole pipeline against the real site, and the only test that needs the
+/// network. Run it with `cargo test -p wnd-cli -- --ignored`.
+///
+/// `n0608gd` has 89 chapters across 8 arcs, which is why it is the reference
+/// novel: two of them is enough to see the meter count, the truncation work, and
+/// the resume on the second run.
+#[test]
+#[ignore = "needs the network and a live site"]
+fn downloads_a_real_novel_end_to_end() {
+    const URL: &str = "https://ncode.syosetu.com/n0608gd/";
+
+    let guard = TempDir::new("live");
+    let out = guard.path().join("novel");
+
+    let output = nvd(&[
+        "download",
+        URL,
+        "--out",
+        out.to_str().unwrap(),
+        "--max-chapters",
+        "2",
+        "--format",
+        "txt,md",
+    ]);
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+
+    // The meter is live: one line per chapter, counted against the total.
+    let meter = stderr(&output);
+    assert!(meter.contains("[1/2] fetch"), "got:\n{meter}");
+    assert!(meter.contains("[2/2] fetch"), "got:\n{meter}");
+
+    // The summary is on stdout, and it counts what actually happened.
+    let summary = stdout(&output);
+    assert!(
+        summary.contains("2 fetched, 0 skipped, 2 total"),
+        "got:\n{summary}"
+    );
+    assert!(summary.contains("exported:"), "got:\n{summary}");
+
+    // The exports exist and contain prose, not just headings.
+    let text = fs::read_to_string(exported(&out, "txt")).unwrap();
+    assert!(text.lines().count() > 5, "got:\n{text}");
+
+    let manifest = wnd_core::NovelDir::at(&out).read_manifest().unwrap();
+    assert_eq!(
+        manifest.chapters.len(),
+        2,
+        "--max-chapters truncated the index"
+    );
+    assert_eq!(manifest.chapters[0].index, 1);
+    assert!(
+        manifest.chapters[0].arc.is_some(),
+        "the arc survives the export"
+    );
+
+    // Running it again must fetch nothing and change nothing.
+    let again = nvd(&[
+        "download",
+        URL,
+        "--out",
+        out.to_str().unwrap(),
+        "--max-chapters",
+        "2",
+    ]);
+    assert_eq!(again.status.code(), Some(0), "stderr: {}", stderr(&again));
+    assert!(
+        stdout(&again).contains("0 fetched, 2 skipped, 2 total"),
+        "the second run must resume:\n{}",
+        stdout(&again)
+    );
+}

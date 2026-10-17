@@ -12,5 +12,7 @@ path = "src/main.rs"
 [dependencies]
 wnd-core.workspace = true
 wnd-sources.workspace = true
+wnd-download.workspace = true
+wnd-export.workspace = true
 clap.workspace = true
 url.workspace = true
