@@ -18,6 +18,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use url::Url;
+use wnd_core::session::netscape;
+use wnd_core::session::{Session, SessionStore};
 use wnd_core::{FetchPolicy, HttpClient, NovelDir};
 use wnd_download::{DownloadOptions, Progress, UpdateOptions, UpdateSummary};
 use wnd_export::{ExportOptions, ExportSummary, Format};
@@ -32,6 +34,10 @@ use wnd_export::{ExportOptions, ExportSummary, Format};
 struct Cli {
     #[command(subcommand)]
     command: Command,
+
+    /// Where sessions live. Defaults to the user's own data directory.
+    #[arg(long, global = true)]
+    session_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -59,6 +65,9 @@ enum Command {
         /// wrong; not a licence to ignore a site's wishes
         #[arg(long)]
         no_robots: bool,
+        /// Use a saved session (by name) for the hosts it names
+        #[arg(long)]
+        session: Option<String>,
     },
 
     /// Fetch only new or changed chapters of an already-downloaded novel
@@ -83,6 +92,9 @@ enum Command {
         /// find an edit on a site that publishes no revision (Kakuyomu)
         #[arg(long)]
         check: bool,
+        /// Use a saved session (by name) for the hosts it names
+        #[arg(long)]
+        session: Option<String>,
     },
 
     /// Export a downloaded novel (EPUB, TXT, or Markdown)
@@ -98,6 +110,12 @@ enum Command {
     Info {
         /// Directory previously written by `nvd download`
         dir: PathBuf,
+    },
+
+    /// Save, list or forget a session the user handed over
+    Session {
+        #[command(subcommand)]
+        action: SessionAction,
     },
 }
 
@@ -122,6 +140,27 @@ impl From<FormatArg> for Format {
     }
 }
 
+#[derive(Debug, Subcommand)]
+enum SessionAction {
+    /// Import a browser's cookie export under a name
+    Save {
+        /// Name to give the session (e.g. "pixiv")
+        name: String,
+        /// A Netscape `cookies.txt` file, as any browser export extension writes
+        file: PathBuf,
+        /// Restrict the session to these hosts instead of the file's own domains
+        #[arg(long)]
+        host: Vec<String>,
+    },
+    /// List the sessions that are saved
+    List,
+    /// Forget a saved session
+    Delete {
+        /// Name of the session to remove
+        name: String,
+    },
+}
+
 fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(code) => ExitCode::from(code),
@@ -140,6 +179,7 @@ const EXIT_OK: u8 = 0;
 const EXIT_NOTHING_UPDATED: u8 = 3;
 
 fn run(cli: Cli) -> Result<u8, String> {
+    let session_dir = cli.session_dir.clone();
     match cli.command {
         Command::Info { dir } => info(&dir).map(|()| EXIT_OK),
 
@@ -151,16 +191,21 @@ fn run(cli: Cli) -> Result<u8, String> {
             max_chapters,
             force,
             no_robots,
-        } => download(
-            &url,
-            &out,
-            &format,
-            allow_adult,
-            max_chapters,
-            force,
-            no_robots,
-        )
-        .map(|()| EXIT_OK),
+            session,
+        } => {
+            let session = load_session(session.as_deref(), session_dir.as_deref())?;
+            download(
+                &url,
+                &out,
+                &format,
+                allow_adult,
+                max_chapters,
+                force,
+                no_robots,
+                session,
+            )
+            .map(|()| EXIT_OK)
+        }
 
         Command::Export { dir, format } => export(&dir, &format).map(|()| EXIT_OK),
 
@@ -168,10 +213,17 @@ fn run(cli: Cli) -> Result<u8, String> {
             dir,
             allow_adult,
             check,
-        } => update(&dir, allow_adult, check),
+            session,
+        } => {
+            let session = load_session(session.as_deref(), session_dir.as_deref())?;
+            update(&dir, allow_adult, check, session)
+        }
+
+        Command::Session { action } => session_cmd(action, session_dir.as_deref()),
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn download(
     url: &str,
     out: &Path,
@@ -180,6 +232,7 @@ fn download(
     max_chapters: Option<usize>,
     force: bool,
     no_robots: bool,
+    session: Option<Session>,
 ) -> Result<(), String> {
     let url = Url::parse(url).map_err(|error| format!("invalid URL `{url}`: {error}"))?;
     let policy = FetchPolicy {
@@ -191,8 +244,11 @@ fn download(
         // a site rather than what we do with the answer.
         eprintln!("warning: robots.txt is being ignored (--no-robots)");
     }
-    let client = HttpClient::new(policy)
+    let mut client = HttpClient::new(policy)
         .map_err(|error| format!("could not build the HTTP client: {error}"))?;
+    if let Some(session) = session {
+        client = client.with_session(session);
+    }
     let options = DownloadOptions {
         allow_adult,
         max_chapters,
@@ -230,9 +286,17 @@ fn download(
     Ok(())
 }
 
-fn update(dir: &Path, allow_adult: bool, check: bool) -> Result<u8, String> {
-    let client = HttpClient::new(FetchPolicy::default())
+fn update(
+    dir: &Path,
+    allow_adult: bool,
+    check: bool,
+    session: Option<Session>,
+) -> Result<u8, String> {
+    let mut client = HttpClient::new(FetchPolicy::default())
         .map_err(|error| format!("could not build the HTTP client: {error}"))?;
+    if let Some(session) = session {
+        client = client.with_session(session);
+    }
     let options = UpdateOptions { allow_adult, check };
 
     let mut reporter = Reporter::default();
@@ -282,6 +346,126 @@ fn update_exit_code(summary: &UpdateSummary) -> u8 {
     } else {
         EXIT_OK
     }
+}
+
+fn session_cmd(action: SessionAction, session_dir: Option<&Path>) -> Result<u8, String> {
+    let dir = resolve_session_dir(session_dir)?;
+    let store = SessionStore::at(dir);
+
+    match action {
+        SessionAction::Save { name, file, host } => {
+            let text = std::fs::read_to_string(&file)
+                .map_err(|error| format!("could not read {}: {error}", file.display()))?;
+            let cookies = netscape::parse(&text)
+                .map_err(|error| format!("could not read {}: {error}", file.display()))?;
+            if cookies.is_empty() {
+                return Err(format!("{} holds no cookies", file.display()));
+            }
+            let hosts = if host.is_empty() {
+                wnd_core::session::hosts_of(&cookies)
+            } else {
+                host
+            };
+            let session = Session::new(name, hosts, cookies);
+            let path = store.save(&session).map_err(|error| error.to_string())?;
+            println!(
+                "saved session `{}` ({} cookies) to {}",
+                session.name(),
+                session.cookies().len(),
+                path.display()
+            );
+            Ok(EXIT_OK)
+        }
+        SessionAction::List => {
+            let sessions = store.list().map_err(|error| error.to_string())?;
+            if sessions.is_empty() {
+                println!("no sessions saved");
+                return Ok(EXIT_OK);
+            }
+            for summary in sessions {
+                println!(
+                    "{}  hosts: {}  cookies: {}  saved: {}  expiry: {}",
+                    summary.name,
+                    if summary.hosts.is_empty() {
+                        "(none)".to_string()
+                    } else {
+                        summary.hosts.join(", ")
+                    },
+                    summary.cookies,
+                    human_age(now_secs().saturating_sub(summary.saved_at)),
+                    expiry_text(summary.expires_at)
+                );
+            }
+            Ok(EXIT_OK)
+        }
+        SessionAction::Delete { name } => {
+            store.delete(&name).map_err(|error| error.to_string())?;
+            println!("forgot session `{name}`");
+            Ok(EXIT_OK)
+        }
+    }
+}
+
+fn load_session(name: Option<&str>, session_dir: Option<&Path>) -> Result<Option<Session>, String> {
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    let dir = resolve_session_dir(session_dir)?;
+    let store = SessionStore::at(dir);
+    let session = store.load(name).map_err(|error| error.to_string())?;
+    Ok(Some(session))
+}
+
+fn resolve_session_dir(session_dir: Option<&Path>) -> Result<PathBuf, String> {
+    match session_dir {
+        Some(dir) => Ok(dir.to_path_buf()),
+        None => wnd_core::session::default_dir().map_err(|error| error.to_string()),
+    }
+}
+
+fn expiry_text(expires_at: Option<u64>) -> String {
+    match expires_at {
+        None => "no expiry".to_string(),
+        Some(at) => {
+            let now = now_secs();
+            if at > now {
+                format!("expires in {}", human_duration(at - now))
+            } else {
+                format!("expired {}", human_duration(now - at))
+            }
+        }
+    }
+}
+
+fn human_age(seconds: u64) -> String {
+    if seconds < 60 {
+        "just now".to_string()
+    } else if seconds < 3600 {
+        format!("{} minutes ago", seconds / 60)
+    } else if seconds < 86400 {
+        format!("{} hours ago", seconds / 3600)
+    } else {
+        format!("{} days ago", seconds / 86400)
+    }
+}
+
+fn human_duration(seconds: u64) -> String {
+    if seconds < 60 {
+        format!("{seconds} seconds")
+    } else if seconds < 3600 {
+        format!("{} minutes", seconds / 60)
+    } else if seconds < 86400 {
+        format!("{} hours", seconds / 3600)
+    } else {
+        format!("{} days", seconds / 86400)
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .unwrap_or(0)
 }
 
 fn export(dir: &Path, formats: &[FormatArg]) -> Result<(), String> {

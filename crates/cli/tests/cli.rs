@@ -141,7 +141,7 @@ fn help_lists_every_command() {
 
     assert_eq!(output.status.code(), Some(0));
     let text = stdout(&output);
-    for command in ["download", "update", "export", "info"] {
+    for command in ["download", "update", "export", "info", "session"] {
         assert!(
             text.contains(command),
             "help should mention {command}:\n{text}"
@@ -380,4 +380,89 @@ fn updates_a_real_novel_and_then_has_nothing_to_do() {
         "the meter says what it is doing:\n{}",
         stderr(&output)
     );
+}
+
+#[test]
+fn session_save_list_delete_round_trips() {
+    let guard = TempDir::new("session-round-trip");
+    let session_dir = guard.path().join("sessions");
+    let cookies = guard.path().join("cookies.txt");
+    std::fs::write(&cookies, ".example.com\tTRUE\t/\tTRUE\t0\tSESS\tabc123\n").unwrap();
+
+    let save = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "save",
+        "demo",
+        cookies.to_str().unwrap(),
+    ]);
+    assert_eq!(save.status.code(), Some(0), "stderr: {}", stderr(&save));
+    assert!(stdout(&save).contains("saved session `demo`"));
+
+    let list = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "list",
+    ]);
+    assert_eq!(list.status.code(), Some(0), "stderr: {}", stderr(&list));
+    let text = stdout(&list);
+    assert!(text.contains("demo"), "got:\n{text}");
+    assert!(text.contains("example.com"), "got:\n{text}");
+    assert!(!text.contains("abc123"), "a listing never carries a value: got:\n{text}");
+
+    let delete = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "delete",
+        "demo",
+    ]);
+    assert_eq!(delete.status.code(), Some(0), "stderr: {}", stderr(&delete));
+
+    let list = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "list",
+    ]);
+    assert!(stdout(&list).contains("no sessions saved"));
+}
+
+#[test]
+fn session_save_rejects_an_empty_export() {
+    let guard = TempDir::new("session-empty");
+    let session_dir = guard.path().join("sessions");
+    let cookies = guard.path().join("cookies.txt");
+    std::fs::write(&cookies, "# Netscape HTTP Cookie File\n").unwrap();
+
+    let output = nvd(&[
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+        "session",
+        "save",
+        "demo",
+        cookies.to_str().unwrap(),
+    ]);
+    assert_ne!(output.status.code(), Some(0));
+    assert!(stderr(&output).contains("holds no cookies"));
+}
+
+#[test]
+fn download_with_a_missing_session_names_it() {
+    let guard = TempDir::new("session-missing");
+    let session_dir = guard.path().join("sessions");
+    let output = nvd(&[
+        "download",
+        "https://example.com/novel/1",
+        "--out",
+        guard.path().join("out").to_str().unwrap(),
+        "--session",
+        "nope",
+        "--session-dir",
+        session_dir.to_str().unwrap(),
+    ]);
+    assert_ne!(output.status.code(), Some(0));
+    assert!(stderr(&output).contains("no session named `nope`"));
 }
