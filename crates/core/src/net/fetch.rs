@@ -18,9 +18,9 @@
 //! hatch for a site whose published rules are stale or broken.
 
 use crate::error::{Error, Result};
-use crate::policy::FetchPolicy;
-use crate::rate_limit::RateLimiter;
-use crate::robots::RobotsRules;
+use crate::net::policy::FetchPolicy;
+use crate::net::rate_limit::RateLimiter;
+use crate::net::robots::RobotsRules;
 use reqwest::Url;
 use reqwest::header::{HeaderMap, RETRY_AFTER};
 use std::collections::HashMap;

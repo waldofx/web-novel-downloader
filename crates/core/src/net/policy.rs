@@ -1,6 +1,6 @@
 //! How we are allowed to talk to other people's servers.
 
-use crate::rate_limit::RateLimiter;
+use crate::net::rate_limit::RateLimiter;
 use std::time::Duration;
 
 /// Politeness settings for the fetcher.

@@ -1,28 +1,28 @@
 //! Core of `web-novel-downloader`.
 //!
-//! This crate owns everything that is *not* specific to a single website:
+//! This crate owns everything that is *not* specific to a single website, split
+//! by feature into two modules:
 //!
-//! - the [`model`] of a downloaded novel (manifest, chapters, node tree),
-//! - [`storage`] of that model on disk,
-//! - the [`policy`] for fetching politely, the [`rate_limit`]r enforcing it, and
-//!   the [`fetch`] layer that applies both together with [`robots`] rules.
+//! - [`store`] — the [`model`](store::model) of a downloaded novel, and its
+//!   [`storage`](store::storage) on disk,
+//! - [`net`] — fetching politely: the [`policy`](net::policy), the
+//!   [`rate_limit`](net::rate_limit)r enforcing it, [`robots`](net::robots)
+//!   rules, and the [`fetch`](net::fetch) layer that applies them.
 //!
-//! Site-specific code lives in `wnd-sources` and produces the types defined here.
+//! The types consumers reach for most are re-exported at the crate root, so
+//! `wnd_core::Manifest` works as well as `wnd_core::store::model::Manifest`.
+//! Site-specific code lives in `wnd-sources` and produces these types.
 
 pub mod error;
-pub mod fetch;
-pub mod model;
-pub mod policy;
-pub mod rate_limit;
-pub mod robots;
-pub mod storage;
+pub mod net;
+pub mod store;
 
 pub use error::{Error, Result};
-pub use fetch::{HttpClient, RawCache};
-pub use model::{
+pub use net::fetch::{HttpClient, RawCache};
+pub use net::policy::FetchPolicy;
+pub use net::rate_limit::RateLimiter;
+pub use net::robots::RobotsRules;
+pub use store::model::{
     Block, Chapter, ChapterMeta, ContentRating, FORMAT_VERSION, Inline, Manifest, SourceInfo,
 };
-pub use policy::FetchPolicy;
-pub use rate_limit::RateLimiter;
-pub use robots::RobotsRules;
-pub use storage::NovelDir;
+pub use store::storage::NovelDir;
