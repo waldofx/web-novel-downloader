@@ -2,8 +2,8 @@
 //!
 //! These run the real executable, so they cover the parts the library tests
 //! cannot: argument parsing, exit codes, which stream output goes to, and the
-//! wording a user actually sees. Nothing here needs the network — the one test
-//! that does is `#[ignore]`d.
+//! wording a user actually sees. Nothing here needs the network — the tests that
+//! do are `#[ignore]`d.
 
 mod common;
 
@@ -150,13 +150,49 @@ fn help_lists_every_command() {
 }
 
 #[test]
-fn update_reports_that_it_is_not_implemented() {
-    let (_guard, novel) = novel("update");
+fn update_on_a_directory_that_is_not_a_novel_is_an_error() {
+    let guard = TempDir::new("update-not-a-novel");
+    let dir = guard.path().to_str().unwrap();
+
+    let output = nvd(&["update", dir]);
+
+    assert_eq!(output.status.code(), Some(1), "a failure must not exit 0");
+    // The message names the directory that was tried, not just "file not found".
+    assert!(stderr(&output).contains(dir), "got:\n{}", stderr(&output));
+    assert!(stdout(&output).is_empty(), "nothing was produced");
+}
+
+#[test]
+fn update_on_a_novel_no_adapter_handles_names_the_url() {
+    // The directory is a valid one; the site it came from is not ours to fetch.
+    let (_guard, novel) = novel("update-unsupported");
 
     let output = nvd(&["update", novel.root().to_str().unwrap()]);
 
     assert_eq!(output.status.code(), Some(1));
-    assert!(stderr(&output).contains("not implemented"));
+    let text = stderr(&output);
+    assert!(
+        text.contains("https://fake.test/novel/"),
+        "the error must name the novel's URL:\n{text}"
+    );
+    assert!(
+        !text.contains("not implemented"),
+        "update is implemented:\n{text}"
+    );
+}
+
+#[test]
+fn update_help_documents_its_flags_and_its_exit_code() {
+    let output = nvd(&["update", "--help"]);
+
+    assert_eq!(output.status.code(), Some(0));
+    let text = stdout(&output);
+    assert!(text.contains("--check"), "got:\n{text}");
+    assert!(text.contains("--allow-adult"), "got:\n{text}");
+    assert!(
+        text.contains("Exits 3"),
+        "an exit code nobody expects must be said out loud:\n{text}"
+    );
 }
 
 /// The whole pipeline against the real site, and the only test that needs the
@@ -306,4 +342,42 @@ fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
 
     let text = fs::read_to_string(exported(&out, "txt")).unwrap();
     assert!(text.lines().count() > 5, "got:\n{text}");
+}
+
+/// `nvd update` against the real site. A single-chapter short story, because the
+/// point is the exit code and the wording, not the volume — and because an
+/// update against a capped download legitimately fetches everything the cap left
+/// behind, which would be 87 chapters here.
+#[test]
+#[ignore = "needs the network and a live site"]
+fn updates_a_real_novel_and_then_has_nothing_to_do() {
+    const URL: &str = "https://ncode.syosetu.com/n5589cg/";
+
+    let guard = TempDir::new("live-update");
+    let out = guard.path().join("novel");
+
+    let output = nvd(&["download", URL, "--out", out.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+
+    // A directory that is already current exits 3 rather than 0 — the whole
+    // point of the code — and says so instead of printing an empty summary.
+    let output = nvd(&["update", out.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(3), "stderr: {}", stderr(&output));
+    assert!(
+        stdout(&output).contains("up to date"),
+        "got:\n{}",
+        stdout(&output)
+    );
+
+    // `--check` asks the site about the chapter, finds it unchanged, writes
+    // nothing, and still exits 3: fetching in order to compare is not updating.
+    let output = nvd(&["update", out.to_str().unwrap(), "--check"]);
+    assert_eq!(output.status.code(), Some(3), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("1 compared, 0 changed"), "got:\n{text}");
+    assert!(
+        stderr(&output).contains("check"),
+        "the meter says what it is doing:\n{}",
+        stderr(&output)
+    );
 }
