@@ -9,7 +9,9 @@
 //!   [`rate_limit`](net::rate_limit)r enforcing it, [`robots`](net::robots)
 //!   rules, the [`fetch`](net::fetch) layer that applies them, and
 //!   [`blocked`](net::blocked), which notices when the answer is a bot challenge
-//!   or something that is not the site at all.
+//!   or something that is not the site at all,
+//! - [`session`] — the cookie jars the user provides for the sites that answer
+//!   an ordinary client with a challenge.
 //!
 //! The types consumers reach for most are re-exported at the crate root, so
 //! `wnd_core::Manifest` works as well as `wnd_core::store::model::Manifest`.
@@ -17,6 +19,7 @@
 
 pub mod error;
 pub mod net;
+pub mod session;
 pub mod store;
 
 pub use error::{Error, Result};
