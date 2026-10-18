@@ -43,6 +43,13 @@ editing Rust.
 When a fixture is updated from a live capture, re-read the assertions that depend
 on it — a changed page is exactly when an adapter needs attention.
 
+A capture is usually longer than the test needs, and a **trimmed** one is still a
+real one: keep the markup around the thing under test, cut the rest, and say in
+the constant's doc comment in `src/fixtures.rs` what was trimmed and where the
+markup came from. That matters most when a fixture is composed from two captures,
+or when the site could not be reached for a fresh one — `hameln/chapter-illustrated.html`
+is both, and its comment says so.
+
 `crates/core/tests/fixtures/blocked/` holds two pages that are *not* the site
 (First Media's filter notice, Cloudflare's challenge), each captured from the real
 thing with `curl`. Nothing matches their text any more — they are here so the
