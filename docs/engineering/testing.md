@@ -47,8 +47,23 @@ A capture is usually longer than the test needs, and a **trimmed** one is still 
 real one: keep the markup around the thing under test, cut the rest, and say in
 the constant's doc comment in `src/fixtures.rs` what was trimmed and where the
 markup came from. That matters most when a fixture is composed from two captures,
-or when the site could not be reached for a fresh one — `hameln/chapter-illustrated.html`
-is both, and its comment says so.
+or when the site could not be reached for a fresh one —
+`hameln/chapter-illustrated.html` was once both, and the comment beside the
+constant said so.
+
+The **shape** is what a fixture is for, not the words in it. A fixture taken
+straight from a capture replaces the author's prose and the real addresses with
+obvious placeholders, and keeps the site's elements, attributes, spacing and
+quirks exactly as captured, because those are what the adapter is tested against.
+Real prose still sits in the older fixtures; #41 carries the placeholders across
+them.
+
+Two traps in a browser-saved capture. It rewrites every asset it loaded to
+`./<page title>_files/…` and leaves the `<a href>` beside it alone, so the `src`
+in the save is not the address the site served. And the page can be a different
+one than it looks: `hameln/chapter-illustrated.html`'s markup first came from a
+work page's **synopsis**, because `syosetu.org` was unreachable from the machine
+that wrote it, and now comes from a body.
 
 `crates/core/tests/fixtures/blocked/` holds two pages that are *not* the site
 (First Media's filter notice, Cloudflare's challenge), each captured from the real
