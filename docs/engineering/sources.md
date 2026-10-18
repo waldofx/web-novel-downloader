@@ -99,12 +99,17 @@ work and episode pages only, and the shared fetcher already leaves 1s between tw
 requests to the same host — which is what that crawl delay asks for — so no
 per-host override is needed.
 
+### Illustrations
+
+Kakuyomu **does not allow a picture in an episode**. Its help centre says images
+cannot be placed on an episode page — only on an activity report — and every
+`<img>` on an episode is the site's own: the header logos, a promotion, the ad
+slot. `div.widget-episodeBody` is therefore the boundary, and it is what keeps
+those logos out of the novel. A picture inside that container would still become
+a `Block::Image` like any other site's, because the walk is shared (#42).
+
 ### Known gaps
 
-- **Illustrations inside a body are dropped** (#42). An `<img>` inside an episode
-  never becomes a `Block::Image`, so nothing fetches it. The other half — a
-  `Block::Image` becoming a file in `images/` — works, and pixiv uses it; what is
-  missing is this adapter noticing the picture at all.
 - **Paywalled episodes** (Kakuyomu Pay) would surface as a parse error rather
   than a partial chapter. No work tested has one.
 
