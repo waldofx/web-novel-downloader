@@ -121,3 +121,30 @@ pub fn novel(tag: &str) -> (TempDir, NovelDir) {
 
     (guard, novel)
 }
+
+/// Give chapter `index` one stored illustration, the way a fetch would.
+///
+/// The three facts have to agree — a file in `images/`, an entry in the manifest
+/// and a block pointing at it — so this writes all three rather than leaving a
+/// caller to remember them.
+pub fn add_illustration(novel: &NovelDir, index: u32) {
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\nstand-in for a picture";
+
+    let file = format!("images/{index:04}-1.png");
+    novel.write_image(&file, PNG).unwrap();
+
+    let mut manifest = novel.read_manifest().unwrap();
+    manifest.images.push(wnd_core::StoredImage {
+        url: format!("https://fake.test/illust/{index}.png"),
+        file: file.clone(),
+        hash: wnd_core::store::storage::hash_bytes(PNG),
+    });
+    novel.write_manifest(&manifest).unwrap();
+
+    let mut chapter = novel.read_chapter(index).unwrap();
+    chapter.nodes.push(Block::Image {
+        src: file,
+        alt: None,
+    });
+    novel.write_chapter(&chapter).unwrap();
+}

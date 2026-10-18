@@ -104,11 +104,13 @@ Two conventions make it scriptable:
 my-novel/
 ├── manifest.json   # the novel's details and its chapter list
 ├── chapters/       # one file per chapter
-├── images/
+├── images/         # the cover, and any illustrations the chapters point at
 └── exports/        # generated files
 ```
 
 Copy it, move it, back it up — it is self-contained. `exports/` is disposable
-and always regenerable from `chapters/`.
+and always regenerable from `chapters/`. An illustration that could not be
+downloaded keeps its address instead of the chapter losing the picture
+altogether; `nvd update` tries again on the next run.
 
 The [format page](../engineering/format.md) describes all of it in detail.

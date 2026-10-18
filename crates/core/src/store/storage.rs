@@ -28,8 +28,121 @@ pub fn chapter_file_name(index: u32) -> String {
 /// Used as a chapter's change-detection hash in the manifest.
 pub fn hash_json<T: serde::Serialize>(value: &T) -> Result<String> {
     let bytes = serde_json::to_vec(value)?;
-    let digest = Sha256::digest(&bytes);
-    Ok(format!("sha256:{}", to_hex(&digest)))
+    Ok(hash_bytes(&bytes))
+}
+
+/// SHA-256 over raw bytes, prefixed with the algorithm.
+///
+/// The same hash as [`hash_json`] over the same bytes; used for the stored
+/// images, whose content is not JSON.
+pub fn hash_bytes(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!("sha256:{}", to_hex(&digest))
+}
+
+/// File name for a chapter's image, e.g. `images/0001-2.png`.
+///
+/// `position` counts the chapter's *distinct* images from one, not blocks: an
+/// image keeps its name when the prose around it is edited, so a chapter that
+/// gained a paragraph does not look like a chapter whose illustration moved.
+/// Zero-padded so a directory listing stays in reading order.
+pub fn image_file_name(chapter: u32, position: usize, extension: &str) -> String {
+    format!("images/{chapter:04}-{position}.{extension}")
+}
+
+/// File name for the work's cover, e.g. `images/cover.png`.
+pub fn cover_file_name(extension: &str) -> String {
+    format!("images/cover.{extension}")
+}
+
+/// The extension an image is stored under.
+///
+/// The server's media type comes first, because the extension is what every
+/// reader afterwards uses to decide whether it can open the file — the EPUB's
+/// own manifest included, where a wrong one is a broken illustration. The URL's
+/// extension is the fallback for a host that sends no `Content-Type`, and `bin`
+/// is the last resort: nothing renders it, but nothing is lost either.
+///
+/// The result is a bare token, because a media type is a stranger's string and
+/// this value becomes part of a file name.
+pub fn image_extension(content_type: Option<&str>, url: &str) -> String {
+    if let Some(subtype) = content_type.and_then(media_subtype) {
+        if let Some(known) = known_extension(subtype) {
+            return known.to_string();
+        }
+        // An unrecognized `image/…`: the token is still a better answer than
+        // nothing, and harmless once stripped to `[a-z0-9]`.
+        if let Some(token) = sanitized_extension(subtype) {
+            return token;
+        }
+    }
+    url_extension(url)
+        .and_then(sanitized_extension)
+        .unwrap_or_else(|| "bin".to_string())
+}
+
+/// Whether a response's media type says the body is a page rather than a picture.
+///
+/// A server that answers an image URL with `text/html` has served a *page* — a
+/// filter, a captive portal, a soft 404 — and storing that under `images/` would
+/// put it in someone's EPUB. `None` is not that: a host that omits the header is
+/// common, and the URL's own extension is then the best evidence there is.
+///
+/// Deliberately only the unambiguous cases. `application/octet-stream` is
+/// accepted, because hosts that send it for a perfectly good image are common
+/// enough that refusing would lose pictures to a technicality.
+pub fn is_page_media_type(content_type: Option<&str>) -> bool {
+    let Some(media_type) = content_type.and_then(|value| value.split(';').next()) else {
+        return false;
+    };
+    let media_type = media_type.trim().to_ascii_lowercase();
+    media_type.starts_with("text/") || media_type == "application/xhtml+xml"
+}
+
+/// The subtype of an `image/…` media type, e.g. `png` from `image/png; q=1`.
+fn media_subtype(content_type: &str) -> Option<&str> {
+    let media_type = content_type.split(';').next()?.trim();
+    let (kind, subtype) = media_type.split_once('/')?;
+    if kind.eq_ignore_ascii_case("image") {
+        Some(subtype.trim())
+    } else {
+        None
+    }
+}
+
+/// The extension we store a media subtype under, for the ones readers know.
+fn known_extension(subtype: &str) -> Option<&'static str> {
+    match subtype.trim().to_ascii_lowercase().as_str() {
+        "jpeg" | "jpg" => Some("jpg"),
+        "png" => Some("png"),
+        "gif" => Some("gif"),
+        "webp" => Some("webp"),
+        "avif" => Some("avif"),
+        "svg+xml" => Some("svg"),
+        "bmp" => Some("bmp"),
+        _ => None,
+    }
+}
+
+/// The extension in a URL's last path segment, query string ignored.
+fn url_extension(url: &str) -> Option<&str> {
+    // Not `url::Url`: this runs on strings a server chose, and the only part
+    // that matters is the segment before `?` or `#`.
+    let path = url.split(['?', '#']).next()?;
+    let segment = path.rsplit('/').next()?;
+    let (stem, extension) = segment.rsplit_once('.')?;
+    (!stem.is_empty() && !extension.is_empty()).then_some(extension)
+}
+
+/// `value` stripped to something safe to put in a file name, or `None`.
+fn sanitized_extension(value: &str) -> Option<String> {
+    let token: String = value
+        .chars()
+        .take(12)
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    (!token.is_empty()).then_some(token)
 }
 
 fn to_hex(bytes: &[u8]) -> String {
@@ -153,6 +266,34 @@ impl NovelDir {
             bytes,
         })
     }
+
+    /// Where a stored image lives. `file` is the manifest's path, relative to
+    /// the novel directory (`images/0001-1.png`), so a directory that is moved
+    /// or copied keeps working.
+    pub fn image_path(&self, file: &str) -> PathBuf {
+        self.root.join(file)
+    }
+
+    /// Write image bytes, replacing any previous copy of the same name.
+    ///
+    /// Atomic, like every other write here: an interrupted fetch leaves the
+    /// previous picture rather than half of a new one.
+    pub fn write_image(&self, file: &str, bytes: &[u8]) -> Result<Written> {
+        let path = self.image_path(file);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        write_bytes(&path, bytes)?;
+        Ok(Written {
+            hash: hash_bytes(bytes),
+            bytes: bytes.len() as u64,
+        })
+    }
+
+    /// Read a stored image back, for the resume check and for `nvd info`.
+    pub fn read_image(&self, file: &str) -> Result<Vec<u8>> {
+        Ok(fs::read(self.image_path(file))?)
+    }
 }
 
 /// Write JSON to `path` atomically: a sibling temporary file, then a rename.
@@ -200,6 +341,20 @@ fn write_json_with<T: serde::Serialize>(path: &Path, value: &T, mode: Option<u32
         return Err(error.into());
     }
     Ok(json.len() as u64)
+}
+
+/// Write bytes to `path` atomically, the way [`write_json`] writes JSON.
+fn write_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+    let temporary = temporary_path(path);
+    if let Err(error) = fs::write(&temporary, bytes) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    if let Err(error) = fs::rename(&temporary, path) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    Ok(())
 }
 
 /// `0600` on `path`, where the platform has such a thing.
@@ -419,5 +574,87 @@ mod tests {
             dir.read_chapter(7),
             Err(Error::ChapterNotFound(7))
         ));
+    }
+
+    #[test]
+    fn image_names_say_what_the_file_is() {
+        // The media type wins: it is what the EPUB's own manifest will declare,
+        // and a reader that is told `image/png` opens a png.
+        assert_eq!(image_extension(Some("image/png"), "https://x/y.jpg"), "png");
+        assert_eq!(image_extension(Some("image/jpeg"), "https://x/y"), "jpg");
+        assert_eq!(
+            image_extension(Some("image/webp; q=1"), "https://x/y"),
+            "webp"
+        );
+
+        // A host that says nothing, or says something that carries no type: the
+        // URL is the next best evidence.
+        assert_eq!(image_extension(None, "https://x/a/cover.PNG"), "png");
+        assert_eq!(
+            image_extension(Some("application/octet-stream"), "https://x/a/1.jpeg"),
+            "jpeg"
+        );
+        // A query string is not an extension.
+        assert_eq!(
+            image_extension(None, "https://x/cover.jpg?token=abc"),
+            "jpg"
+        );
+        assert_eq!(image_extension(None, "https://x/cover"), "bin");
+
+        // A media type is a stranger's string and it becomes part of a file
+        // name, so nothing of it survives but letters and digits — and not many
+        // of those.
+        assert_eq!(
+            image_extension(Some("image/../../etc/passwd"), "https://x/y"),
+            "etcpa"
+        );
+    }
+
+    #[test]
+    fn a_page_is_not_an_image() {
+        // A filter that answers an image URL has served a page, and a page must
+        // not end up inside someone's EPUB.
+        assert!(is_page_media_type(Some("text/html; charset=utf-8")));
+        assert!(is_page_media_type(Some("TEXT/HTML")));
+        assert!(is_page_media_type(Some("application/xhtml+xml")));
+
+        assert!(!is_page_media_type(None), "silence is not an accusation");
+        assert!(!is_page_media_type(Some("image/png")));
+        // Hosts serve perfectly good images under this, so it is not a page.
+        assert!(!is_page_media_type(Some("application/octet-stream")));
+    }
+
+    #[test]
+    fn image_names_are_zero_padded_and_ordered() {
+        assert_eq!(image_file_name(1, 1, "png"), "images/0001-1.png");
+        assert_eq!(image_file_name(42, 12, "jpg"), "images/0042-12.jpg");
+        assert_eq!(cover_file_name("webp"), "images/cover.webp");
+    }
+
+    #[test]
+    fn write_image_reports_the_hash_and_leaves_no_temporary_file() {
+        let dir = temp_novel("image");
+        dir.ensure_layout().unwrap();
+
+        let file = image_file_name(1, 1, "png");
+        let bytes = b"\x89PNG\r\n\x1a\nnot really a png";
+        let written = dir.write_image(&file, bytes).unwrap();
+        assert_eq!(written.bytes, bytes.len() as u64);
+        assert_eq!(written.hash, hash_bytes(bytes));
+        assert_eq!(dir.read_image(&file).unwrap(), bytes);
+
+        // Same bytes, same hash: a resume check compares the file with the
+        // recorded hash rather than trusting the name.
+        assert_eq!(dir.write_image(&file, bytes).unwrap().hash, written.hash);
+        assert_eq!(dir.read_image(&file).unwrap(), bytes);
+
+        let names: Vec<String> = fs::read_dir(dir.images_dir())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["0001-1.png".to_string()]);
+
+        assert!(dir.read_image("images/absent.png").is_err());
+        fs::remove_dir_all(dir.root()).ok();
     }
 }

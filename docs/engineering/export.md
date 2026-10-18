@@ -174,7 +174,9 @@ does not:
 - Emphasis, strong text, links and images use real Markdown.
 - **Image paths are rewritten** to `../images/…`. The model's `src` is relative to
   the novel directory, but the Markdown file lives in `exports/`, so the same
-  relative path would point at nothing.
+  relative path would point at nothing. A `src` that is still a URL — a picture
+  nothing fetched — is left absolute for the same reason: `../https://…` is a path
+  to nowhere, and a reader that can reach the URL may as well try.
 - Escaping is deliberately short — `\ * _ ` ` [ ]` inside text, plus a leading `#`
   or `>` — because this is prose. Backslash-escaping Japanese punctuation would
   make the file worse to read, not better. It is not a complete CommonMark
@@ -227,10 +229,11 @@ de-duplicated, and copied into `OEBPS/images/`. The relative `src` in the XHTML 
 prefixed with `../` because the chapter document lives one level down in `text/`.
 
 A referenced image that is **not on disk is skipped**, and so is its manifest
-entry. This is deliberate for now: the downloader does not fetch images yet (see
-the [roadmap](architecture.md#roadmap)), so treating a missing file as fatal would
-make the exporter refuse to run on ordinary novels. When image fetching lands, a
-missing image becomes a fetch failure, and this can be revisited.
+entry. That stays true now that images *are* fetched (see
+[format.md](format.md#what-is-in-images)): a chapter that keeps its URL is a
+chapter whose picture could not be had, `nvd update` tries again next run, and
+refusing to export a novel over one absent file would be the wrong trade. The
+block still names it, so the alt text shows where the picture should be.
 
 ## Notes, and why they are on by default
 

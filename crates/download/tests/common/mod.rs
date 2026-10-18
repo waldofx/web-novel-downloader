@@ -6,8 +6,8 @@
 //! compiled as a test binary of its own.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use url::Url;
@@ -35,6 +35,9 @@ pub struct FakeChapter {
     /// The body text, so a test can change what the site serves without touching
     /// any timestamp: an edit the index cannot announce.
     pub body: String,
+    /// Image URLs the body references, in order. An image is an illustration the
+    /// *fetcher* has to store; the adapter only knows where it is.
+    pub images: Vec<String>,
 }
 
 /// An adapter that serves a novel from memory.
@@ -59,6 +62,10 @@ pub struct FakeSource {
     /// When set, `chapter()` fails for this index. Used to check that an
     /// interrupted run leaves a directory that resumes.
     pub fail_index: Option<u32>,
+    /// The cover URL the index states. `None` for a site with no covers.
+    pub cover_url: Mutex<Option<String>>,
+    /// What this adapter says its images must be requested with.
+    pub referer: Option<&'static str>,
 }
 
 fn chapter_with_id(id: u32) -> FakeChapter {
@@ -67,6 +74,7 @@ fn chapter_with_id(id: u32) -> FakeChapter {
         title: format!("第{id}話"),
         revised_at: None,
         body: format!("body of chapter {id}"),
+        images: Vec::new(),
     }
 }
 
@@ -80,6 +88,8 @@ impl FakeSource {
             toc_fetches: AtomicUsize::new(0),
             chapter_fetches: AtomicUsize::new(0),
             fail_index: None,
+            cover_url: Mutex::new(None),
+            referer: None,
         }
     }
 
@@ -88,6 +98,24 @@ impl FakeSource {
             rating: ContentRating::Adult,
             ..Self::new(chapter_count)
         }
+    }
+
+    /// State a cover, the way an adapter reads one off a work page.
+    pub fn with_cover(self, url: &str) -> Self {
+        *self.cover_url.lock().unwrap() = Some(url.to_string());
+        self
+    }
+
+    /// State the `Referer` this "site" demands for its images.
+    pub fn with_referer(self, referer: &'static str) -> Self {
+        let mut source = self;
+        source.referer = Some(referer);
+        source
+    }
+
+    /// Add an image to a chapter's body.
+    pub fn image(&self, position: usize, url: &str) {
+        self.chapters()[position - 1].images.push(url.to_string());
     }
 
     pub fn toc_fetches(&self) -> usize {
@@ -143,6 +171,10 @@ impl Source for FakeSource {
         self.rating
     }
 
+    fn image_referer(&self) -> Option<&'static str> {
+        self.referer
+    }
+
     fn novel(&self, _fetch: &HttpClient, _url: &Url) -> Result<Manifest, SourceError> {
         self.toc_fetches.fetch_add(1, Ordering::SeqCst);
 
@@ -156,6 +188,7 @@ impl Source for FakeSource {
             "ja",
         );
         manifest.content_rating = self.rating;
+        manifest.cover_url = self.cover_url.lock().unwrap().clone();
         manifest.chapters = self
             .chapters()
             .iter()
@@ -201,6 +234,12 @@ impl Source for FakeSource {
                 value: chapter.body.clone(),
             }],
         });
+        for url in &chapter.images {
+            parsed.nodes.push(Block::Image {
+                src: url.clone(),
+                alt: None,
+            });
+        }
         Ok(parsed)
     }
 }
@@ -208,6 +247,249 @@ impl Source for FakeSource {
 /// A client that will never be asked to make a request.
 pub fn client() -> HttpClient {
     HttpClient::new(FetchPolicy::default()).expect("client")
+}
+
+/// A client for a local server: no `robots.txt` to consult, no politeness
+/// delay, and no retries — a test must not sleep its way through a backoff, and
+/// a `404` it is asserting on must not be asked for twice.
+pub fn local_client() -> HttpClient {
+    HttpClient::new(FetchPolicy {
+        respect_robots: false,
+        min_delay: std::time::Duration::ZERO,
+        max_retries: 1,
+        ..FetchPolicy::default()
+    })
+    .expect("client")
+}
+
+/// One canned image answer.
+#[derive(Debug, Clone)]
+pub struct Image {
+    pub status: u16,
+    /// `None` sends no `Content-Type` header at all, which some hosts do.
+    pub content_type: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
+impl Image {
+    pub fn png(bytes: &str) -> Self {
+        Self {
+            status: 200,
+            content_type: Some("image/png".to_string()),
+            bytes: bytes.as_bytes().to_vec(),
+        }
+    }
+
+    /// A worthwhile picture served with no type at all, so the URL decides.
+    pub fn untyped(bytes: &str) -> Self {
+        Self {
+            status: 200,
+            content_type: None,
+            bytes: bytes.as_bytes().to_vec(),
+        }
+    }
+
+    /// What a host answers when it has nothing to give.
+    pub fn not_found() -> Self {
+        Self {
+            status: 404,
+            content_type: Some("text/html; charset=utf-8".to_string()),
+            bytes: b"<html><body>not found</body></html>".to_vec(),
+        }
+    }
+
+    /// What a filter answers: a page, with a success status.
+    pub fn a_page() -> Self {
+        Self {
+            status: 200,
+            content_type: Some("text/html; charset=utf-8".to_string()),
+            bytes: "<html><body>BU SİTEYE ERİŞİM ENGELLENMİŞTİR</body></html>"
+                .as_bytes()
+                .to_vec(),
+        }
+    }
+}
+
+/// A request the image server saw.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Seen {
+    pub path: String,
+    pub referer: Option<String>,
+}
+
+/// A local HTTP server that answers image requests, and remembers them.
+///
+/// Tests need a real socket here and nowhere else. What has to be proved is that
+/// the fetcher *sends* what the site demands, trusts the media type the server
+/// states, and gives up on a `404` without losing the chapter — and none of that
+/// is visible from inside the process.
+///
+/// Every path answers the same image unless the test registers another one; the
+/// requests are recorded in order, so a test can say "that was not asked for
+/// twice" rather than only "the file is there".
+#[derive(Debug)]
+pub struct ImageServer {
+    address: std::net::SocketAddr,
+    base: String,
+    default: Image,
+    routes: Arc<Mutex<std::collections::HashMap<String, Image>>>,
+    requests: Arc<Mutex<Vec<Seen>>>,
+    stop: Arc<AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl ImageServer {
+    pub fn start(default: Image) -> Self {
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a free port");
+        let address = listener.local_addr().expect("the bound address");
+        let routes: Arc<Mutex<std::collections::HashMap<String, Image>>> =
+            Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let requests: Arc<Mutex<Vec<Seen>>> = Arc::new(Mutex::new(Vec::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let served_routes = Arc::clone(&routes);
+        let served_requests = Arc::clone(&requests);
+        let served_stop = Arc::clone(&stop);
+        let served_default = default.clone();
+
+        let handle = std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                if served_stop.load(Ordering::SeqCst) {
+                    return;
+                }
+                let Ok(mut stream) = stream else { continue };
+                let seen = read_head(&stream);
+                let answer = served_routes
+                    .lock()
+                    .expect("routes")
+                    .get(&seen.path)
+                    .cloned()
+                    .unwrap_or_else(|| served_default.clone());
+                served_requests.lock().expect("requests").push(seen);
+                answer_to(&mut stream, &answer);
+            }
+        });
+
+        Self {
+            address,
+            base: format!("http://{address}"),
+            default,
+            routes,
+            requests,
+            stop,
+            handle: Some(handle),
+        }
+    }
+
+    /// The URL of a path on this server.
+    pub fn url(&self, path: &str) -> String {
+        format!("{}/{}", self.base, path.trim_start_matches('/'))
+    }
+
+    /// Answer `path` with something other than the default.
+    pub fn serve(&self, path: &str, image: Image) {
+        self.routes
+            .lock()
+            .expect("routes")
+            .insert(format!("/{}", path.trim_start_matches('/')), image);
+    }
+
+    pub fn requests(&self) -> Vec<Seen> {
+        self.requests.lock().expect("requests").clone()
+    }
+
+    pub fn request_count(&self) -> usize {
+        self.requests().len()
+    }
+
+    pub fn served_default(&self) -> &Image {
+        &self.default
+    }
+}
+
+impl Drop for ImageServer {
+    fn drop(&mut self) {
+        use std::net::TcpStream;
+
+        self.stop.store(true, Ordering::SeqCst);
+        // Wake the accept loop so it can notice that it is finished.
+        let _ = TcpStream::connect(self.address);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// Read a request head and keep the two things a test asks about.
+fn read_head(stream: &std::net::TcpStream) -> Seen {
+    use std::io::BufRead;
+
+    let reading = stream.try_clone().expect("a second handle for reading");
+    let mut reader = std::io::BufReader::new(reading);
+    let mut seen = Seen::default();
+    let mut line = String::new();
+    let mut request_line = true;
+
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) if line == "\r\n" || line == "\n" => break,
+            Ok(_) => {}
+        }
+        if request_line {
+            // `GET /path HTTP/1.1`
+            seen.path = line
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or_default()
+                .to_string();
+            request_line = false;
+            continue;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("referer") {
+                seen.referer = Some(value.trim().to_string());
+            }
+        }
+    }
+
+    seen
+}
+
+/// Write one canned answer, then close.
+fn answer_to(stream: &mut std::net::TcpStream, image: &Image) {
+    use std::io::Write;
+
+    let content_type = match &image.content_type {
+        Some(value) => format!("Content-Type: {value}\r\n"),
+        None => String::new(),
+    };
+    let head = format!(
+        "HTTP/1.1 {} {}\r\n{content_type}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        image.status,
+        reason(image.status),
+        image.bytes.len()
+    );
+
+    if stream.write_all(head.as_bytes()).is_err() {
+        return;
+    }
+    let _ = stream.write_all(&image.bytes);
+    let _ = stream.flush();
+}
+
+/// The reason phrase for a status a test cares about.
+fn reason(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        403 => "Forbidden",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        _ => "Unknown",
+    }
 }
 
 /// A directory that deletes itself when dropped, so a failing assertion cannot

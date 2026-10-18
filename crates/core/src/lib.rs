@@ -24,11 +24,12 @@ pub mod store;
 
 pub use error::{Error, Result};
 pub use net::blocked::BlockKind;
-pub use net::fetch::{HttpClient, Page, RawCache};
+pub use net::fetch::{Asset, HttpClient, Page, RawCache};
 pub use net::policy::FetchPolicy;
 pub use net::rate_limit::RateLimiter;
 pub use net::robots::RobotsRules;
 pub use store::model::{
     Block, Chapter, ChapterMeta, ContentRating, FORMAT_VERSION, Inline, Manifest, SourceInfo,
+    StoredImage,
 };
 pub use store::storage::{NovelDir, Written};

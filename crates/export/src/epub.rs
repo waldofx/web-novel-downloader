@@ -47,8 +47,10 @@ img { max-width: 100%; }
 /// Write `manifest` and `chapters` to `target` as an EPUB, and report its size.
 ///
 /// Images are copied from `dir` when they are there. A missing one is skipped
-/// rather than fatal: the downloader does not fetch images yet, and refusing to
-/// export a novel because an illustration is absent would be the wrong trade.
+/// rather than fatal: a directory can hold a chapter whose illustration could not
+/// be fetched (`nvd update` tries again), and refusing to export the novel over
+/// one absent picture would be the wrong trade. The block still names it, so a
+/// reader sees the alt text rather than nothing.
 pub fn write(
     dir: &NovelDir,
     manifest: &Manifest,

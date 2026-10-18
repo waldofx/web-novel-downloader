@@ -149,6 +149,26 @@ the same `403`, which is exactly why that is not the answer.
 
 [pixiv]: https://github.com/waldofx/web-novel-downloader/issues/20
 
+## The `Referer`, when a host asks for one
+
+One host in this repository's world will not serve a picture without being told
+which page it appeared on: `i.pximg.net`, pixiv's image host, answers `403` to a
+request that carries no `Referer`. An adapter says so by overriding
+`Source::image_referer` — pixiv returns `https://www.pixiv.net/`, every other
+adapter returns `None` — and the fetch layer sends it, on image requests only.
+
+Three things keep this from being a trick:
+
+- **It is what a browser would have sent.** A `Referer` is not an identity and not
+  a credential: it is the page the request was made from, and that page is the
+  novel the user asked to download.
+- **Only the site that asks gets one.** No other adapter declares a referer, and
+  inventing one for a host that never asked would be a claim about where the
+  request came from that is not true.
+- **Nothing else is relaxed.** The request is still rate-limited, still checked
+  against `robots.txt`, and still retried by the same rules as any other. The
+  header is one line on a request the site was going to answer anyway.
+
 ## The raw cache
 
 `RawCache` stores fetched bodies under a novel's `raw/` directory. It exists for

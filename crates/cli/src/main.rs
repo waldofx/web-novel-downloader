@@ -270,6 +270,7 @@ fn download(
         "  chapters: {} fetched, {} skipped, {} total",
         summary.chapters_fetched, summary.chapters_skipped, summary.chapters_total
     );
+    print_images(summary.images_fetched, summary.images_missing);
     println!("  written:  {}", human_bytes(summary.bytes_written));
     println!("  output:   {}", summary.output_dir.display());
 
@@ -318,6 +319,7 @@ fn update(dir: &Path, check: bool, session: Option<Session>) -> Result<u8, Strin
             summary.chapters_checked, summary.chapters_fetched
         );
     }
+    print_images(summary.images_fetched, summary.images_missing);
     println!("  written:  {}", human_bytes(summary.bytes_written));
     for gone in &summary.removed {
         // Said out loud, and never acted on: deleting a file the user already has
@@ -339,6 +341,19 @@ fn update_exit_code(summary: &UpdateSummary) -> u8 {
     } else {
         EXIT_OK
     }
+}
+
+/// Images are worth a line only when there are any: a novel with no pictures
+/// should not report "0 images".
+fn print_images(fetched: usize, missing: usize) {
+    if fetched == 0 && missing == 0 {
+        return;
+    }
+    print!("  images:   {fetched} fetched");
+    if missing > 0 {
+        print!(", {missing} could not be fetched (each keeps its URL)");
+    }
+    println!();
 }
 
 fn session_cmd(action: SessionAction, session_dir: Option<&Path>) -> Result<u8, String> {
@@ -547,6 +562,9 @@ fn info(dir: &Path) -> Result<(), String> {
         println!("  tags:     {}", manifest.tags.join(", "));
     }
     println!("  chapters: {}", manifest.chapters.len());
+    if !manifest.images.is_empty() {
+        println!("  images:   {}", manifest.images.len());
+    }
 
     let missing = manifest
         .chapters
@@ -555,6 +573,16 @@ fn info(dir: &Path) -> Result<(), String> {
         .count();
     if missing > 0 {
         println!("  missing:  {missing} chapter file(s) not present yet");
+    }
+    // A picture that is recorded but not on disk is worth saying: a renderer will
+    // silently leave a gap, and `nvd update` is what fetches it back.
+    let gone = manifest
+        .images
+        .iter()
+        .filter(|image| !dir.image_path(&image.file).is_file())
+        .count();
+    if gone > 0 {
+        println!("  missing:  {gone} image file(s) not present; nvd update fetches them");
     }
     Ok(())
 }
@@ -602,6 +630,15 @@ impl Reporter {
                 // Fetched and compared, and nothing was written: `update --check`.
                 self.seen += 1;
                 eprintln!("  {} check  {title}", self.counter());
+            }
+            Progress::ImageFetched { file, bytes } => {
+                // A sub-line: an image belongs to the chapter above it, and a
+                // meter that counted pictures as steps would misreport where in
+                // the novel a reader is.
+                eprintln!("         image  {file} ({})", human_bytes(*bytes));
+            }
+            Progress::ImageMissing { url, reason } => {
+                eprintln!("         image  {url}: {reason}");
             }
         }
     }
@@ -654,6 +691,8 @@ mod tests {
             chapters_skipped: 3,
             chapters_checked: 0,
             removed: Vec::new(),
+            images_fetched: 0,
+            images_missing: 0,
             bytes_written: 0,
             output_dir: PathBuf::from("novel"),
         };
@@ -676,6 +715,22 @@ mod tests {
             ..nothing.clone()
         };
         assert_eq!(update_exit_code(&gone), 0);
+
+        // An image that had to be fetched is news: the directory gained a file.
+        let picture = UpdateSummary {
+            images_fetched: 1,
+            ..nothing.clone()
+        };
+        assert_eq!(update_exit_code(&picture), 0);
+
+        // An image that *could not* be fetched is not news. It will fail again
+        // next run, and a directory that kept claiming there was something new
+        // about a permanently broken link would make `3` useless.
+        let broken = UpdateSummary {
+            images_missing: 1,
+            ..nothing.clone()
+        };
+        assert_eq!(update_exit_code(&broken), 3);
     }
 
     #[test]

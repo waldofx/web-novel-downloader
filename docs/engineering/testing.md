@@ -60,6 +60,7 @@ cargo test -p wnd-sources --test narou_live    -- --ignored --nocapture
 cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
 cargo test -p wnd-sources --test hameln_live   -- --ignored --nocapture
 cargo test -p wnd-sources --test pixiv_live    -- --ignored --nocapture
+cargo test -p wnd-download --test pixiv_live   -- --ignored --nocapture
 ```
 
 Live tests print what they found (`--nocapture`) so that a failure shows the real
@@ -86,6 +87,7 @@ paste the output. "Should work" is not evidence.
 | `robots.txt` parsing and decisions | `core/src/net/robots.rs` | plus one live test |
 | model serialization, storage round-trip, hash stability | `core/src/store/{model,storage}.rs` | temp directories; atomic writes leave no `.tmp` behind |
 | the download sequence: resume, `--force`, `--max-chapters`, an interrupted run | `crates/download/tests/download.rs` | driven by an in-memory adapter — no network |
+| fetching a picture: the file and its name, the manifest entry and its hash, rewriting the chapter, resume by hash, a `404` that costs no chapter, a page served where a picture belongs, the extension coming from the media type | `crates/download/tests/images.rs` | a real one-shot HTTP server on `127.0.0.1`, so it stays offline; it records each request and its `Referer`, which is the only way to check the header |
 | the exports: exact TXT and Markdown documents, EPUB structure, reproducibility | `crates/export/tests/export.rs` | a novel written to a temp directory; the EPUB is read back with `zip` |
 | the excerpt from a body that is not the site: tags, comments, `<script>`/`<style>`, entities, whitespace, and the cut on a character boundary | `core/src/net/blocked.rs` | fixture captures in `crates/core/tests/fixtures/blocked/`, plus the captured Komdigi notice's own words |
 | what the fetch layer does with an answer that is not the site: the `Cf-Mitigated` header, no page-text matching, the facts that travel with a body, a redirect, and the interception probe | `crates/core/tests/blocked.rs` | a real one-shot socket on `127.0.0.1`, so it stays offline; the exact user-facing sentence is asserted |
@@ -100,3 +102,4 @@ paste the output. "Should work" is not evidence.
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |
 | Kakuyomu against the real site, including the 1069-episode work | `sources/tests/kakuyomu_live.rs` | `#[ignore]`d |
 | Pixiv against the real site: a series URL expanding to every chapter it states, and a standalone novel's reader pages arriving whole | `sources/tests/pixiv_live.rs` | `#[ignore]`d. Both tests re-read the API answer the manifest points at and compare *counts* — the two ways this adapter fails quietly are a series cut to one chapter and a chapter cut to one reader page |
+| An illustrated pixiv series, downloaded whole: the cover and the in-text pictures, every hash verified against bytes a real server sent, a second run fetching nothing, and `--check` finding nothing changed | `download/tests/pixiv_live.rs` | `#[ignore]`d. This is the one test that proves the `Referer`, because `i.pximg.net` answers `403` without it and would fail every assertion at once |

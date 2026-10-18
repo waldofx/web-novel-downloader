@@ -25,6 +25,44 @@ fn info_describes_a_downloaded_directory() {
 }
 
 #[test]
+fn info_reports_the_images_a_directory_holds() {
+    let (_guard, novel) = novel("info-images");
+    common::add_illustration(&novel, 1);
+
+    let text = stdout(&nvd(&["info", novel.root().to_str().unwrap()]));
+    assert!(text.contains("images:   1"), "got:\n{text}");
+    assert!(
+        !text.contains("not present"),
+        "nothing is missing yet:\n{text}"
+    );
+
+    // A picture the directory has lost is said out loud rather than left for a
+    // reader to discover as a gap in the export.
+    fs::remove_file(novel.image_path("images/0001-1.png")).unwrap();
+    let text = stdout(&nvd(&["info", novel.root().to_str().unwrap()]));
+    assert!(text.contains("1 image file(s) not present"), "got:\n{text}");
+}
+
+#[test]
+fn an_illustration_reaches_the_epub() {
+    let (_guard, novel) = novel("export-image");
+    common::add_illustration(&novel, 1);
+
+    let output = nvd(&["export", novel.root().to_str().unwrap(), "--format", "epub"]);
+
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    let epub = exported(novel.root(), "epub");
+    let bytes = fs::read(&epub).unwrap();
+    // The picture is in the archive — found by name, so this does not depend on
+    // the ZIP's internal ordering.
+    let needle = b"images/0001-1.png";
+    assert!(
+        bytes.windows(needle.len()).any(|window| window == needle),
+        "the illustration is not in the archive"
+    );
+}
+
+#[test]
 fn export_writes_the_requested_formats() {
     let (_guard, novel) = novel("export");
 

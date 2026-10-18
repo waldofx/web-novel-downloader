@@ -68,6 +68,24 @@ pub struct ChapterMeta {
     pub file: String,
 }
 
+/// One image the downloader stored in `images/`.
+///
+/// A record of what was fetched — not of what the chapters point at, which is
+/// the same thing only until a chapter is rewritten. Its purpose is the one
+/// `ChapterMeta::hash` has: a later run can tell a stored image from a missing
+/// or corrupted one without trusting a file name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredImage {
+    /// The URL it was fetched from. Also its identity: the same URL next run
+    /// means the same bytes, so nothing is fetched again.
+    pub url: String,
+    /// Path inside the novel directory, e.g. `images/0001-1.png`.
+    pub file: String,
+    /// `sha256:…` over the stored bytes. As with a chapter, the hash is what a
+    /// resume check compares — never mere existence.
+    pub hash: String,
+}
+
 /// Top-level metadata for one downloaded novel (`manifest.json`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
@@ -106,6 +124,12 @@ pub struct Manifest {
     pub fetched_at: Option<String>,
     #[serde(default)]
     pub chapters: Vec<ChapterMeta>,
+    /// Images stored in `images/`, cover included.
+    ///
+    /// Empty for a novel with no illustrations and a cover nothing has fetched
+    /// yet — which is every novel an adapter has only just described.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<StoredImage>,
 }
 
 impl Manifest {
@@ -126,11 +150,17 @@ impl Manifest {
             warnings: Vec::new(),
             fetched_at: None,
             chapters: Vec::new(),
+            images: Vec::new(),
         }
     }
 
     pub fn chapter(&self, index: u32) -> Option<&ChapterMeta> {
         self.chapters.iter().find(|c| c.index == index)
+    }
+
+    /// The stored image that came from `url`, when there is one.
+    pub fn image(&self, url: &str) -> Option<&StoredImage> {
+        self.images.iter().find(|image| image.url == url)
     }
 }
 
@@ -414,5 +444,83 @@ mod tests {
             r#""adult""#
         );
         assert_eq!(ContentRating::default(), ContentRating::General);
+    }
+
+    #[test]
+    fn manifest_json_matches_the_documented_shape() {
+        // The example from docs/engineering/format.md, images included. If this
+        // stops parsing, the docs and the code have drifted apart.
+        let json = r#"{
+          "format_version": 1,
+          "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n1234ab/" },
+          "title": "…",
+          "author": "…",
+          "language": "ja",
+          "content_rating": "general",
+          "tags": ["…"],
+          "synopsis": "…",
+          "cover": "images/cover.jpg",
+          "cover_url": "https://example.test/cover.jpg",
+          "fetched_at": "2026-10-17T00:00:00Z",
+          "chapters": [
+            {
+              "index": 1,
+              "title": "…",
+              "url": "…",
+              "arc": "第一章",
+              "published_at": "2020-04-01T23:23:00+09:00",
+              "revised_at": "2023-09-01T14:36:00+09:00",
+              "hash": "sha256:…",
+              "file": "chapters/0001.json"
+            }
+          ],
+          "images": [
+            {
+              "url": "https://example.test/cover.jpg",
+              "file": "images/cover.jpg",
+              "hash": "sha256:…"
+            }
+          ]
+        }"#;
+
+        let manifest: Manifest = serde_json::from_str(json).expect("documented shape must parse");
+        assert_eq!(manifest.format_version, FORMAT_VERSION);
+        assert_eq!(manifest.chapters.len(), 1);
+        assert_eq!(
+            manifest
+                .image("https://example.test/cover.jpg")
+                .map(|image| image.file.as_str()),
+            Some("images/cover.jpg")
+        );
+    }
+
+    #[test]
+    fn an_empty_image_list_is_omitted_and_a_missing_one_still_parses() {
+        let manifest = Manifest::new(
+            SourceInfo {
+                id: "narou".into(),
+                novel_url: "https://ncode.syosetu.com/n1234ab/".into(),
+                site_title: None,
+            },
+            "テスト小説",
+            "ja",
+        );
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(
+            !json.contains("images") && !json.contains("null"),
+            "a novel with no pictures says nothing about pictures: {json}"
+        );
+
+        // A directory written before images were recorded is still readable:
+        // the list is an addition, so the version does not move for it.
+        let legacy = r#"{"format_version":1,
+          "source":{"id":"narou","novel_url":"https://ncode.syosetu.com/n1234ab/"},
+          "title":"t","language":"ja","content_rating":"general","chapters":[]}"#;
+        assert!(
+            serde_json::from_str::<Manifest>(legacy)
+                .unwrap()
+                .images
+                .is_empty()
+        );
     }
 }
