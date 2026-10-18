@@ -1,0 +1,27 @@
+[package]
+name = "wnd-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "The desktop app: a window over wnd-download and wnd-export"
+publish = false
+
+[[bin]]
+name = "nvd-app"
+path = "src/main.rs"
+
+[dependencies]
+wnd-core = { workspace = true }
+wnd-sources = { workspace = true }
+wnd-download = { workspace = true }
+wnd-export = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+tauri = { workspace = true }
+rfd = { workspace = true }
+
+[build-dependencies]
+tauri-build = { workspace = true }

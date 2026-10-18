@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "The one window: the app's own commands, and the progress channel it listens on.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
