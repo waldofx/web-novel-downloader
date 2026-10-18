@@ -11,15 +11,25 @@
 
 mod common;
 
-use wnd_core::{BlockKind, ChapterMeta, Error};
+use wnd_core::{Block, BlockKind, ChapterMeta, Error};
 use wnd_sources::kakuyomu::Kakuyomu;
 use wnd_sources::narou::Narou;
+use wnd_sources::pixiv::Pixiv;
 use wnd_sources::{Source, SourceError};
 
 use common::{local_client, response, serve};
 
 /// A real Narou chapter page, for the happy path.
 const NAROU_CHAPTER: &str = include_str!("fixtures/narou/chapter.html");
+
+/// A real Pixiv novel answer, for the happy path.
+///
+/// Pixiv is the one adapter whose chapter URL is not a page a browser would
+/// open: it is the API URL the body comes from, which the adapter fetches as it
+/// stands. That keeps this file's whole premise true for it — a chapter URL
+/// comes from the manifest and is fetched as-is — and it is why pixiv is here
+/// at all rather than covered by captures alone.
+const PIXIV_NOVEL: &str = include_str!("fixtures/pixiv/novel-in-series.json");
 
 /// A block page in a language, and from a provider, this tool has never seen.
 ///
@@ -144,4 +154,47 @@ fn an_ordinary_chapter_is_still_read_as_a_chapter() {
         .expect("a real chapter page must still parse");
 
     assert!(!chapter.nodes.is_empty(), "the body came through");
+}
+
+#[test]
+fn a_filter_page_at_a_pixiv_novel_url_is_reported_with_its_own_words() {
+    // Pixiv answers in JSON, so a page that is not JSON at all is not this API
+    // — and the reader gets the page's own words rather than a complaint about
+    // a field the parser could not find.
+    let message = chapter_error(&Pixiv, UNKNOWN_FILTER).to_string();
+
+    assert!(
+        message.contains("BU SİTEYE ERİŞİM ENGELLENMİŞTİR"),
+        "got: {message}"
+    );
+    assert!(
+        message.contains("a chapter body was expected"),
+        "and what was expected: {message}"
+    );
+}
+
+#[test]
+fn an_ordinary_pixiv_answer_is_still_read_as_a_chapter() {
+    let url = serve(vec![response("200 OK", &[], PIXIV_NOVEL)]);
+
+    let chapter = Pixiv
+        .chapter(&local_client(), &chapter_meta(&url))
+        .expect("a real answer must still parse");
+
+    assert!(
+        chapter
+            .nodes
+            .iter()
+            .any(|block| matches!(block, Block::SceneBreak)),
+        "the blank-line rule is the same rule here as everywhere: {:#?}",
+        chapter.nodes
+    );
+    assert!(
+        chapter
+            .nodes
+            .iter()
+            .any(|block| matches!(block, Block::Image { .. })),
+        "an uploaded image is placed where the text referenced it: {:#?}",
+        chapter.nodes
+    );
 }

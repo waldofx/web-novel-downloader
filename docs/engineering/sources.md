@@ -22,7 +22,7 @@ The site roadmap, in priority order, plus what it takes to add one.
 | --- | --- | --- | --- |
 | `syosetu.org` | ✅ | **Hameln** (ハーメルン). Fan-fiction oriented; a different platform from Narou. Cloudflare challenge: reachable with a user-provided session (#31). Captures still needed. | Medium |
 | `h.syosetu.org` | ✅ (assumed shared) | Appears to be Hameln's adult sibling. **To verify** whether it shares Hameln's markup. **Adult.** Challenge-gated too. | Low (if shared) |
-| `pixiv.net/novel` | · | Pixiv novels. Needs **login cookies** — now via a user-provided session (#31) — and/or its API for many works. Adult content possible. | High |
+| `pixiv.net/novel` | ✅ | **Pixiv** novels, read from the site's **JSON API** rather than from its pages, which are a JavaScript app over that API. A novel's whole text arrives in one answer, with `[newpage]` where the reader slices it. Adult works are marked per work (`xRestrict`). See [Pixiv notes](#pixiv). | High |
 
 ## P2 — TODO
 
@@ -48,8 +48,9 @@ Two pairs of sites probably share codebases, so one adapter each should do:
 - `ncode.syosetu.com` + `novel18.syosetu.com` (Narou family) — **confirmed**
 - `syosetu.org` + `h.syosetu.org` (Hameln family) — unverified
 
-If the second holds, five of the six P0/P1 sites are covered by three adapters
-(Pixiv being the exception).
+If the second holds, every P0/P1 site is covered: three adapters for the two
+syosetu families, one for Kakuyomu, and one for Pixiv — which shares a platform
+with nobody.
 
 ## Kakuyomu
 
@@ -105,9 +106,109 @@ per-host override is needed.
 - **Paywalled episodes** (Kakuyomu Pay) would surface as a parse error rather
   than a partial chapter. No work tested has one.
 
+## Pixiv
+
+Pixiv is the site that made this list stop being about HTML. Its novel pages are
+a JavaScript app; the data behind them is a JSON API, and that API is what the
+adapter reads. Nothing here parses markup, which is why the module is one file of
+API types, one of text markup, and no DOM helpers at all.
+
+| | What the site has | What the adapter makes of it |
+| --- | --- | --- |
+| the work | one novel, or the series it belongs to | a novel URL that names one novel of a series **expands to the series** |
+| a chapter | one novel: its whole text is in one answer | one chapter per novel, numbered in reading order |
+| reader pages | `[newpage]`, four of them in a five-page chapter | the pages are **joined**; a page is not a chapter |
+| furigana | `[[rb:base > reading]]` | `Inline::Ruby` |
+| links | `[[jumpuri:label > url]]` | `Inline::Link` |
+| the author's dividers | `[chapter:Title]` | a level-2 heading — never a chapter split |
+| the author's images | `[uploadedimage:ID]`, with the URLs in the same answer | a `Block::Image` |
+| somebody else's art | `[pixivimage:ID]` / `[pixivimage:ID-N]` | one `/ajax/illust/{id}` request; unresolved, it stays literal |
+
+### The API, and not the pages
+
+Every `/ajax/` answer is the same envelope — `{"error": …, "message": …,
+"body": …}` — and a failed request is **HTTP 200 with `error: true`**. The
+envelope is therefore read before the payload and the status is never consulted:
+a request for a novel that is gone is a success as far as HTTP is concerned.
+
+Two things about the payloads cost an afternoon each if they are assumed:
+
+- **`null` is not a missing field.** A novel with no embedded images says
+  `"textEmbeddedImages": null`, and `#[serde(default)]` does not cover that — it
+  covers a field that is absent. Without a `null` decoder, whole novels fail to
+  parse.
+- **ids are strings in some answers and numbers in others.** A novel's own `id`
+  is a string, its `seriesNavData.seriesId` is a number, a series' `firstNovelId`
+  is a number. Fields that carry an id decode through one helper rather than
+  through a guess.
+
+### Reading a series
+
+A series listing (`/ajax/novel/series_content/{id}`) arrives **newest-first** and
+pages by `last_order`, which means "the entries below this one" — so the series
+is walked from its end back to chapter one and sorted at the end. The first page
+must not carry `last_order` at all: an empty value is an HTTP 400, and `limit`
+has a ceiling of 10, which is also the pager's stop condition (a page that is not
+full is the last one).
+
+`seriesContentOrder` is the site's own numbering, used to page and sort. Chapters
+are numbered `1..n` in reading order instead — the same rule Kakuyomu's
+position-numbered episodes get, because a number the *site* assigns is not a
+count of anything this tool promises.
+
+### Where the URLs point
+
+The manifest holds two kinds of URL for pixiv, and they are deliberately not the
+same one:
+
+- `source.novel_url` is the **page a human opens** (`/novel/show.php?id=…`, or the
+  series page). `nvd update` re-resolves it, so it has to be a URL the adapter
+  can read again.
+- a chapter's `url` is the **JSON API address its body comes from**
+  (`/ajax/novel/{id}`). It is fetched exactly as it stands — which keeps the
+  invariant every other adapter has, that the manifest's URL *is* what gets
+  fetched, and is what lets `crates/sources/tests/blocked.rs` drive pixiv's
+  chapter path over a socket like the HTML adapters.
+
+### Rating, and sessions
+
+`xRestrict` is `1` for adult and `0` otherwise, per work — so `content_rating` is
+refined from what each work states, and nothing is gated on it. The site enforces
+its own age gate.
+
+Most works read without a session. A work the account may not read comes back
+with `isLoginOnly: true` and an empty body, and the adapter says so and points at
+`nvd session save` rather than writing an empty chapter.
+
+### Politeness
+
+`robots.txt` allows `/ajax/novel/*`. It disallows some `/ajax/illust/*` paths
+(`…/recommend/init`), `/novels/unlisted/*`, `/en/search/` and the bookmark and
+follower paths; none of them is fetched. No `Crawl-delay`, so the shared 1s
+per-host delay applies.
+
+Images live on `i.pximg.net`, which answers **403 to a request without
+`Referer: https://www.pixiv.net/`** — and its own `robots.txt` disallows Google's
+crawlers, not us. Fetching them needs a per-source referer (#18), and a cover is
+not an exception.
+
+### Known gaps
+
+- **`[pixivimage:…]` is best effort.** Each reference costs one request, and a
+  reference that cannot be resolved — the illustration deleted, the reference
+  malformed — is left in the text exactly as the author wrote it rather than
+  costing the reader the chapter.
+- **Images are found, not fetched** (#18 owns that for every source). An
+  in-text image and a cover leave this adapter as URLs; the fetcher that stores
+  them in `images/` and rewrites the chapter is next. See
+  [format.md](format.md#a-url-is-not-a-path).
+- **A series with no published novels** is reported as a page that is not the
+  site, because a manifest with no chapters would otherwise download nothing and
+  call it success.
+
 ## Adult content policy
 
-Adult sources are supported explicitly, but gated:
+Adult sources are supported explicitly, and **nothing is gated**:
 
 - Every novel carries `content_rating: "general" | "adult"` in `manifest.json`.
 - Nothing is gated on it: adult works download like any other. Each site

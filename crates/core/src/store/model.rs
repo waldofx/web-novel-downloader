@@ -147,6 +147,13 @@ pub enum Block {
     },
     SceneBreak,
     HorizontalRule,
+    /// An illustration in the body.
+    ///
+    /// `src` is what a renderer opens: a path into the novel directory's
+    /// `images/` once the bytes have been stored, and the URL the source states
+    /// until then. An adapter can *find* an image but only the fetcher can store
+    /// one, so this is one field with one meaning — where the picture is. See
+    /// `docs/engineering/format.md`, "A URL is not a path".
     Image {
         src: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]

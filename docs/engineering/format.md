@@ -31,6 +31,7 @@ drift. Anything in `exports/` can be deleted and rebuilt.
   "tags": ["…"],
   "synopsis": "…",
   "cover": "images/cover.jpg",
+  "cover_url": "https://…",
   "fetched_at": "2026-10-17T00:00:00Z",
   "chapters": [
     {
@@ -50,10 +51,32 @@ drift. Anything in `exports/` can be deleted and rebuilt.
 `content_rating` is `general` or `adult`.
 
 **Optional fields are omitted, never null.** `arc`, `published_at`, `revised_at`,
-`author`, `synopsis`, `tags`, and `cover` are absent when the site does not expose
-them. `hash` is absent until the chapter has been downloaded at least once — an
-adapter cannot know a chapter's hash before fetching it, so the field is
+`author`, `synopsis`, `tags`, `cover` and `cover_url` are absent when the site does
+not expose them. `hash` is absent until the chapter has been downloaded at least
+once — an adapter cannot know a chapter's hash before fetching it, so the field is
 `Option<String>` in the model and skipped when `None`.
+
+### A URL is not a path
+
+Two fields name a picture, and they are deliberately not the same kind of thing:
+
+- `cover_url`, and a body image's `src` **as an adapter produces it**, are *where
+  the source says the picture is*. An adapter can find an image; it cannot store
+  one.
+- `cover`, and the `src` a *stored* chapter holds, are a **path inside the novel
+  directory**. Only the fetcher can put bytes on disk.
+
+`nvd download` is what turns one into the other: it fetches the cover into
+`images/cover.<ext>` and sets `cover`, and it fetches each body image into
+`images/<chapter>-<n>.<ext>` and rewrites that chapter's `src` before the chapter
+is written. An image that could not be fetched keeps its URL rather than being
+dropped — a renderer falls back to the alt text, nothing about it is lost, and a
+later run can try again.
+
+Until that exists, an adapter's output is the half-way state on purpose:
+`cover_url` is set and `cover` is not, and a chapter written to disk still holds
+URLs. That is issue #18; it is why a novel downloaded today can have a cover URL
+in its manifest and an empty `images/`.
 
 `published_at` is when the chapter appeared and `revised_at` is when the site says
 it was last revised — two facts, and conflating them would rewrite publication

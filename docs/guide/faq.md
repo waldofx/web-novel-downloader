@@ -22,16 +22,20 @@ turn down to just `漢字` if you prefer.
 
 ### Can I download a novel from somewhere other than Narou?
 
-Yes — Narou (`ncode.syosetu.com` and its R18 sibling) and Kakuyomu
-(`kakuyomu.jp`). Hameln and Pixiv are next, and English sites (Royal Road,
-Scribble Hub, AO3, FanFiction.net) are on the list. Paste any URL from a work,
-including the page of the chapter you are reading.
+Yes — Narou (`ncode.syosetu.com` and its R18 sibling), Kakuyomu
+(`kakuyomu.jp`), Hameln (`syosetu.org`) and Pixiv novels
+(`pixiv.net/novel`). English sites (Royal Road, Scribble Hub, AO3,
+FanFiction.net) are on the list. Paste any URL from a work, including the page
+of the chapter you are reading. On Pixiv that includes the page of one chapter
+of a series: the whole series is one work there, so that is what you get (use
+`--max-chapters` for less).
 
 ### Can it fetch adult (R18) works?
 
-Yes. Adult sources (Narou's R18 sibling, Hameln's `h.` host) are handled like
-any other: the rating is recorded in the manifest, but nothing is refused. Each
-site enforces its own age gate, and the tool does not bypass it.
+Yes. Adult sources (Narou's R18 sibling, Hameln's `h.` host, Pixiv works marked
+`xRestrict`) are handled like any other: the rating is recorded in the manifest,
+but nothing is refused. Each site enforces its own age gate, and the tool does
+not bypass it.
 
 ### A site says "Cloudflare served its browser challenge". Can I get past it?
 

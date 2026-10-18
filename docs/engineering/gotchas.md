@@ -50,6 +50,17 @@ version away from coming back, and the next person will search for the *symptom*
 | A work with no arcs and a work with arcs need different code | they do not: an un-arc'd work has one unnamed group whose key is literally `TableOfContentsChapter:` — the empty id is the page's own shape | Resolve refs by exact key string, and treat a missing `chapter` field as "no arc". Requiring a non-empty id breaks every un-arc'd work |
 | A well-meaning change makes `published_at` read `…+09:00` like Narou's | Narou states a wall-clock time with no zone, Kakuyomu states a UTC instant; both are RFC 3339, which is all the model promises | Leave the instant as the site stated it. Converting means date arithmetic (leap years, month lengths) for a field nothing displays; a consumer that wants local time formats it |
 
+## Pixiv's JSON API
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| A novel that parses fine in the browser fails with `invalid type: null, expected a map` | the site sends `null` for what it has none of (`"textEmbeddedImages": null`), and `#[serde(default)]` covers a **missing** field, not an explicit `null` | Decode those fields through a `null_as_default` helper (`sources/src/pixiv/api.rs`). The map- and list-valued fields are the ones it happens to; `Option` fields already handle `null` |
+| `?limit=100` → HTTP 400, and `last_order=` with no value → HTTP 400 as well | the pager's ceiling is 10, and an empty `last_order` is rejected rather than treated as absent | Omit `last_order` on the first page (send `is_first_page=true`); 10 is both the page size and the stop condition — a page that is not full is the last one |
+| A series' chapters come back newest-first, or the series is walked forever | the listing is answered newest-first and pages by `last_order`, which means "the entries *below* this one" | Walk it from the end back to chapter one, sort by `seriesContentOrder`, and number the chapters `1..n` in reading order — that order is the site's paging key, not a chapter number |
+| A five-page chapter downloads as a fifth of a chapter, and nothing complains | `[newpage]` is the site's **reader** pagination inside one chapter's text, not a chapter break | Join the pages: split on the marker, trim the newlines at each boundary, join with one blank line. Replacing the marker with nothing instead invents a **scene break** per page, because the blank lines on either side of it meet |
+| Every illustration 403s, while the same URL opens in a browser | `i.pximg.net` refuses a request with no `Referer: https://www.pixiv.net/` | The fetch layer needs a per-source referer for image requests (#18). A cover or an in-text image is not an exception |
+| An adapter's chapter `url` in the manifest is an `/ajax/` address and looks like a mistake | deliberate: the manifest's URL is what gets fetched, for this adapter too, and it is a *chapter* URL rather than a work URL | A chapter's `url` is the API address its body comes from; `source.novel_url` stays the page a human opens, because `nvd update` re-resolves that one. The payoff is that `tests/blocked.rs` can drive pixiv over a socket like the HTML adapters (see the row above about work URLs) |
+
 ## Networks that answer for the site
 
 | Symptom | Cause | Fix / workaround |
@@ -102,6 +113,7 @@ version away from coming back, and the next person will search for the *symptom*
 | The manifest records a hash but the chapter file is empty, stale, or hand-edited | the file write and the manifest update are separate steps, so a kill between them leaves the two disagreeing | Resume verifies the **content hash**, never existence. Do not "simplify" that check to `exists()`: it would accept exactly the cases the hash exists to catch |
 | A chapter was re-fetched although it was already on disk | resume trusts file existence instead of content | Resume only when the stored hash exists, the file exists, **and** re-hashing the file reproduces the stored hash |
 | An adapter was blamed for an empty chapter that was never cached | a page with no text block returned an empty chapter instead of an error | A chapter page with no text container is `SourceError::NotTheSite` — silence there hides both adapter rot and a page that is not the site |
+| A stored chapter holds a URL where every other chapter in every other directory holds a path, and `nvd export` warns about a missing file | an adapter found an image before anything had fetched it, and `Block::Image.src` is *where the picture is*: the URL until the fetcher stores it, the `images/…` path after | Adapters put the URL there and `nvd download` rewrites it while writing the chapter (#18). Do not "fix" this by dropping the image: the URL is the only record of what the source offered. See [format.md](format.md#a-url-is-not-a-path) |
 
 ## Exports
 
