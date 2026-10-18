@@ -3,13 +3,18 @@
 //! The body lives in `#honbun` as a run of `<p id="N">` lines, one per
 //! paragraph; a paragraph whose text is only an ideographic space (or empty) is a
 //! blank line, and runs of those are scene breaks via the shared rule.
+//!
+//! Hameln wraps an illustration in an `<a>` and writes the `alt` on that `<a>`
+//! rather than on the `<img>` — which is not where HTML says it goes, and is
+//! where the site puts it, so the picture keeps the description the author gave
+//! it and the link around it, which points at the same picture, is not kept.
 
 use crate::SourceError;
 use crate::blocks;
 use crate::dom::{element_text, first_text};
-use crate::inline::{self, plain_text};
+use crate::inline::{self, Piece, plain_text};
 use scraper::{Html, Selector};
-use wnd_core::{Chapter, ChapterMeta, Inline};
+use wnd_core::{Block, Chapter, ChapterMeta};
 
 /// Parse a chapter page into the node model.
 pub fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceError> {
@@ -53,26 +58,36 @@ pub fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceEr
         }
     }
 
-    let lines: Vec<Option<Vec<Inline>>> = container
+    let lines: Vec<Option<Vec<Block>>> = container
         .select(&para_selector)
         .map(|paragraph| {
-            if element_text(&paragraph).trim().is_empty() {
+            let pieces = inline::pieces_of(&paragraph, plain_text, &meta.url);
+            // A paragraph holding a picture is a line however little text it
+            // has: the `alt` is an attribute, so an illustration on its own
+            // would otherwise read as a blank and be dropped.
+            if element_text(&paragraph).trim().is_empty() && !pieces.iter().any(Piece::is_image) {
                 None
             } else {
-                Some(inline::of(&paragraph, plain_text))
+                Some(blocks::from_pieces(pieces))
             }
         })
         .collect();
 
-    chapter.nodes = blocks::from_lines(lines);
+    chapter.nodes = blocks::from_line_blocks(lines);
     Ok(chapter)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::HAMELN_CHAPTER;
-    use wnd_core::Block;
+    use crate::fixtures::{HAMELN_CHAPTER, HAMELN_CHAPTER_ILLUSTRATED};
+    use wnd_core::{Block, Inline};
+
+    fn text(value: &str) -> Inline {
+        Inline::Text {
+            value: value.to_string(),
+        }
+    }
 
     fn chapter_meta(index: u32, title: &str) -> ChapterMeta {
         ChapterMeta {
@@ -95,6 +110,49 @@ mod tests {
         assert_eq!(chapter.index, 1);
         assert!(!chapter.title.is_empty(), "title: {:?}", chapter.title);
         assert!(!chapter.nodes.is_empty(), "body must not be empty");
+    }
+
+    #[test]
+    fn a_picture_in_a_body_keeps_the_alt_the_page_states_and_takes_its_link_with_it() {
+        let meta = chapter_meta(1, "placeholder");
+        let chapter = parse_chapter(HAMELN_CHAPTER_ILLUSTRATED, &meta).unwrap();
+
+        assert_eq!(
+            chapter.nodes,
+            vec![
+                Block::Paragraph {
+                    children: vec![text(
+                        " 学園都市キヴォトス、それは無数の学園と生徒により構成される巨大な都市。"
+                    )]
+                },
+                Block::Paragraph {
+                    children: vec![text(
+                        " 銃声と怒号が日常となったこの街に今、一人の男子生徒が立ち上がる……!"
+                    )]
+                },
+                Block::Image {
+                    src: "http://syosetu.org/img/user/196658/125290.png".to_string(),
+                    // Hameln writes the `alt` on the `<a>` around the picture,
+                    // which is not where HTML says it goes — and still where the
+                    // site puts it.
+                    alt: Some("挿絵".to_string()),
+                },
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![
+                        text(
+                            " 思春期男子の妄想を容赦なくぶった切った目の前の乳出し女に書類を押し付けられながら、書類仕事をこなすこの俺、"
+                        ),
+                        Inline::Ruby {
+                            base: "折川酒泉".to_string(),
+                            reading: "おりかわしゅせん".to_string(),
+                        },
+                        text("は今日も今日とて元気です"),
+                    ]
+                },
+            ],
+            "the link the picture was wrapped in goes with it, and the prose survives"
+        );
     }
 
     #[test]

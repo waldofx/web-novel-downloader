@@ -25,7 +25,7 @@
 //! - indentation is U+3000 and is content, so every trim here is ASCII-only.
 
 use crate::blocks;
-use crate::inline;
+use crate::inline::{self, Piece};
 use std::collections::HashMap;
 use wnd_core::{Block, Inline};
 
@@ -106,6 +106,10 @@ fn is_blank(line: &str) -> bool {
 }
 
 /// One line's blocks: prose, with whatever markers it holds decoded.
+///
+/// An image marker is a block of its own and the prose sharing the line with it
+/// goes beside it, in the order the author wrote it — which is the same rule an
+/// `<img>` in a body gets, so it lives in [`crate::blocks`].
 fn line_blocks(line: &str, images: &Images) -> Vec<Block> {
     if let Some(title) = heading(line) {
         return vec![Block::Heading {
@@ -114,30 +118,7 @@ fn line_blocks(line: &str, images: &Images) -> Vec<Block> {
         }];
     }
 
-    let mut blocks = Vec::new();
-    let mut children: Vec<Inline> = Vec::new();
-
-    for piece in pieces(line, images) {
-        match piece {
-            Piece::Inline(node) => children.push(node),
-            Piece::Image(src) => {
-                // An image is a block of its own; prose sharing the line with
-                // it goes beside it, in the order the author wrote it.
-                if !children.is_empty() {
-                    blocks.push(Block::Paragraph {
-                        children: std::mem::take(&mut children),
-                    });
-                }
-                blocks.push(Block::Image { src, alt: None });
-            }
-        }
-    }
-
-    if !children.is_empty() {
-        blocks.push(Block::Paragraph { children });
-    }
-
-    blocks
+    blocks::from_pieces(pieces(line, images))
 }
 
 /// The title of a `[chapter:…]` line, when that is the whole line.
@@ -158,20 +139,29 @@ fn heading(line: &str) -> Option<String> {
 }
 
 /// One line, split into the markers it holds and the text between them.
+///
+/// The markers that are inline content join the run they sit in; the two that
+/// name an illustration end it, because a picture cannot live inside a paragraph
+/// and the prose around it becomes a paragraph of its own.
 fn pieces(line: &str, images: &Images) -> Vec<Piece> {
     let mut pieces = Vec::new();
+    let mut run: Vec<Inline> = Vec::new();
     let mut text = String::new();
     let mut rest = line;
 
     while !rest.is_empty() {
         match marker(rest, images) {
-            Some((piece, len)) => {
-                if !text.is_empty() {
-                    pieces.push(Piece::Inline(Inline::Text {
-                        value: std::mem::take(&mut text),
-                    }));
+            Some((Marker::Inline(node), len)) => {
+                flush_text(&mut text, &mut run);
+                run.push(node);
+                rest = &rest[len..];
+            }
+            Some((Marker::Image(src), len)) => {
+                flush_text(&mut text, &mut run);
+                if !run.is_empty() {
+                    pieces.push(Piece::Inline(std::mem::take(&mut run)));
                 }
-                pieces.push(piece);
+                pieces.push(Piece::Image { src, alt: None });
                 rest = &rest[len..];
             }
             None => {
@@ -184,15 +174,29 @@ fn pieces(line: &str, images: &Images) -> Vec<Piece> {
         }
     }
 
-    if !text.is_empty() {
-        pieces.push(Piece::Inline(Inline::Text { value: text }));
+    flush_text(&mut text, &mut run);
+    if !run.is_empty() {
+        pieces.push(Piece::Inline(run));
     }
 
     pieces
 }
 
-enum Piece {
+/// The text read so far becomes one node of the run, as the decoder would have
+/// it: the site's notation has no markup *within* a run of text.
+fn flush_text(text: &mut String, run: &mut Vec<Inline>) {
+    if !text.is_empty() {
+        run.push(Inline::Text {
+            value: std::mem::take(text),
+        });
+    }
+}
+
+/// A marker this site's notation offers, before the line is put back together.
+enum Marker {
+    /// Inline content: ruby, a link.
     Inline(Inline),
+    /// Somebody else's illustration, already resolved to an address.
     Image(String),
 }
 
@@ -202,7 +206,7 @@ enum Piece {
 /// this adapter does not know, and there is one it knows but cannot resolve.
 /// All three read literally, which is what keeps an unknown marker in the text
 /// the reader sees instead of deleting it.
-fn marker(text: &str, images: &Images) -> Option<(Piece, usize)> {
+fn marker(text: &str, images: &Images) -> Option<(Marker, usize)> {
     if let Some((body, len)) = bracketed(text, "[[rb:", "]]") {
         let (base, reading) = body.split_once('>')?;
         let (base, reading) = (base.trim_ascii(), reading.trim_ascii());
@@ -210,7 +214,7 @@ fn marker(text: &str, images: &Images) -> Option<(Piece, usize)> {
             return None;
         }
         return Some((
-            Piece::Inline(Inline::Ruby {
+            Marker::Inline(Inline::Ruby {
                 base: base.to_string(),
                 reading: reading.to_string(),
             }),
@@ -225,7 +229,7 @@ fn marker(text: &str, images: &Images) -> Option<(Piece, usize)> {
             return None;
         }
         return Some((
-            Piece::Inline(Inline::Link {
+            Marker::Inline(Inline::Link {
                 href: href.to_string(),
                 children: inline::plain_text(label),
             }),
@@ -235,12 +239,12 @@ fn marker(text: &str, images: &Images) -> Option<(Piece, usize)> {
 
     if let Some((reference, len)) = bracketed(text, "[uploadedimage:", "]") {
         let url = images.get(reference.trim_ascii())?;
-        return Some((Piece::Image(url.clone()), len));
+        return Some((Marker::Image(url.clone()), len));
     }
 
     if let Some((reference, len)) = bracketed(text, "[pixivimage:", "]") {
         let url = images.get(reference.trim_ascii())?;
-        return Some((Piece::Image(url.clone()), len));
+        return Some((Marker::Image(url.clone()), len));
     }
 
     None
