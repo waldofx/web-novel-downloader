@@ -113,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_in_a_body_keeps_the_alt_the_page_states_and_takes_its_link_with_it() {
+    fn an_illustration_in_a_body_becomes_a_picture_with_the_alt_the_link_states() {
         let meta = chapter_meta(1, "placeholder");
         let chapter = parse_chapter(HAMELN_CHAPTER_ILLUSTRATED, &meta).unwrap();
 
@@ -121,37 +121,40 @@ mod tests {
             chapter.nodes,
             vec![
                 Block::Paragraph {
-                    children: vec![text(
-                        " 学園都市キヴォトス、それは無数の学園と生徒により構成される巨大な都市。"
-                    )]
+                    children: vec![text("　本文の一行目のプレースホルダー。")]
                 },
                 Block::Paragraph {
-                    children: vec![text(
-                        " 銃声と怒号が日常となったこの街に今、一人の男子生徒が立ち上がる……!"
-                    )]
+                    children: vec![text("　本文の二行目のプレースホルダー。")]
                 },
+                // `<p id="4"></p><hr><p></p>` and then a blank `<p>`: three blank
+                // lines to the reader, which is one scene break and not three.
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![text("挿絵の説明のような一行")]
+                },
+                Block::SceneBreak,
                 Block::Image {
-                    src: "http://syosetu.org/img/user/196658/125290.png".to_string(),
+                    src: "http://img.example.test/user/0000/000/000001.jpg".to_string(),
                     // Hameln writes the `alt` on the `<a>` around the picture,
-                    // which is not where HTML says it goes — and still where the
+                    // which is not where HTML says it goes — and is where the
                     // site puts it.
                     alt: Some("挿絵".to_string()),
                 },
                 Block::SceneBreak,
                 Block::Paragraph {
-                    children: vec![
-                        text(
-                            " 思春期男子の妄想を容赦なくぶった切った目の前の乳出し女に書類を押し付けられながら、書類仕事をこなすこの俺、"
-                        ),
-                        Inline::Ruby {
-                            base: "折川酒泉".to_string(),
-                            reading: "おりかわしゅせん".to_string(),
-                        },
-                        text("は今日も今日とて元気です"),
-                    ]
+                    children: vec![text("　挿絵のあとの本文のプレースホルダー。")]
+                },
+                Block::SceneBreak,
+                Block::Image {
+                    src: "http://img.example.test/user/0000/000/000002.png".to_string(),
+                    alt: Some("挿絵".to_string()),
+                },
+                Block::Paragraph {
+                    children: vec![text("　本文の最後の行のプレースホルダー。")]
                 },
             ],
-            "the link the picture was wrapped in goes with it, and the prose survives"
+            "a picture is a block and the link around it is not; a line holding one is \
+             not blank; the blank runs around it still separate scenes"
         );
     }
 

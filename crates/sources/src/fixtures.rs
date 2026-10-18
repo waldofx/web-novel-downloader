@@ -50,15 +50,23 @@ pub(crate) const HAMELN_WORK: &str = include_str!("../tests/fixtures/hameln/work
 /// A Hameln chapter page: a title and a body in `#honbun`, with `<ruby>`.
 pub(crate) const HAMELN_CHAPTER: &str = include_str!("../tests/fixtures/hameln/chapter.html");
 
-/// A Hameln body with an illustration in it, trimmed from the capture above to
-/// the lines around the picture.
+/// A Hameln **body** with illustrations in it, trimmed from a real chapter capture
+/// kept in the gitignored `captures/` to the lines around the pictures.
 ///
-/// The picture's markup is this site's own, captured verbatim from the same
-/// work's **synopsis** (`work.html`) — where Hameln's illustrations also live —
-/// because `syosetu.org` was unreachable from the machine that wrote this
-/// fixture. Two things in it are Hameln's and only Hameln's: the `alt` is on the
-/// **`<a>`** rather than on the `<img>`, and the `<a>` carries `name="img"`.
-/// The line it sits on is a `<p id="N">`, which is what a Hameln body is made of.
+/// The shape is the site's; the words are not. The prose and the picture addresses
+/// are placeholders, because a committed fixture should carry neither an author's
+/// text nor a working link to somebody's illustration (#41).
+///
+/// Four things here are Hameln's and only Hameln's, which is why this is a capture
+/// rather than a guess: the `alt` sits on the **`<a>`** rather than on the
+/// `<img>`, that `<a>` carries `name="img"`, an illustration sits alone in its own
+/// `<p id="N">` — a Hameln body is one `<p>` per line, not a synopsis' `<br>` runs
+/// — and the site writes its separator as `<p id="N"></p><hr><p></p>`, empty
+/// paragraphs around a rule.
+///
+/// The capture is a browser save, which had already rewritten every `src` to a
+/// local `_files/` copy while leaving the `<a href>` alone. Both were due to be
+/// replaced by placeholders anyway, so nothing was lost either way.
 pub(crate) const HAMELN_CHAPTER_ILLUSTRATED: &str =
     include_str!("../tests/fixtures/hameln/chapter-illustrated.html");
 
