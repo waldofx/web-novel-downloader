@@ -4,14 +4,20 @@
 //! a `<br>`, and a run of blank lines is how authors mark a scene change. The
 //! rule for what a run means is shared with the other adapters — it is the same
 //! rule everywhere — and lives in [`crate::blocks`].
+//!
+//! An author's illustration gets a `<p>` of its own, holding an `<a>` around an
+//! `<img>` whose address the site writes protocol-relative
+//! (`//8873.mitemin.net/…`). The walk resolves it against the chapter, so the
+//! picture reaches `images/` and an export rather than vanishing.
 
-use super::inline::inlines_of;
+use super::inline::pieces_of;
 use super::{SEL_PARAGRAPH, SEL_TEXT_BLOCK};
 use crate::SourceError;
 use crate::blocks;
 use crate::dom::{element_text, is_class};
+use crate::inline::Piece;
 use scraper::{ElementRef, Html};
-use wnd_core::{Chapter, ChapterMeta, Inline};
+use wnd_core::{Block, Chapter, ChapterMeta};
 
 /// Parse a chapter page into the node model.
 pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceError> {
@@ -21,7 +27,7 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
 
     for container in document.select(&SEL_TEXT_BLOCK) {
         containers += 1;
-        let blocks = blocks::from_lines(container_lines(&container));
+        let blocks = blocks::from_line_blocks(container_lines(&container, &meta.url));
         if is_class(&container, "p-novel__text--preface") {
             chapter.pre_note = blocks;
         } else if is_class(&container, "p-novel__text--afterword") {
@@ -43,15 +49,20 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
 /// Each line of a text container, as `None` for a blank line.
 ///
 /// Narou emits one `<p>` per line; a blank line is a `<p>` whose only content
-/// is a `<br>`.
-fn container_lines(container: &ElementRef) -> Vec<Option<Vec<Inline>>> {
+/// is a `<br>`. A line holding a picture is a line however little text it has —
+/// an `alt` is an attribute, not text — or the picture would read as a blank and
+/// be dropped.
+fn container_lines(container: &ElementRef, page: &str) -> Vec<Option<Vec<Block>>> {
     container
         .select(&SEL_PARAGRAPH)
         .map(|paragraph| {
-            if element_text(&paragraph).trim_ascii().is_empty() {
+            let pieces = pieces_of(&paragraph, page);
+            if element_text(&paragraph).trim_ascii().is_empty()
+                && !pieces.iter().any(Piece::is_image)
+            {
                 None
             } else {
-                Some(inlines_of(&paragraph))
+                Some(blocks::from_pieces(pieces))
             }
         })
         .collect()
@@ -60,8 +71,8 @@ fn container_lines(container: &ElementRef) -> Vec<Option<Vec<Inline>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::{NAROU_CHAPTER, NAROU_SHORT_STORY};
-    use wnd_core::Block;
+    use crate::fixtures::{NAROU_CHAPTER, NAROU_CHAPTER_ILLUSTRATED, NAROU_SHORT_STORY};
+    use wnd_core::Inline;
 
     fn text(value: &str) -> Inline {
         Inline::Text {
@@ -196,6 +207,62 @@ mod tests {
                     text("です。")
                 ]
             }
+        );
+    }
+
+    /// The chapter the illustrated capture came from, so a resolved
+    /// protocol-relative `src` is resolved against the page it really sat on.
+    fn illustrated_meta() -> ChapterMeta {
+        ChapterMeta {
+            index: 288,
+            title: "第288話".to_string(),
+            url: "https://ncode.syosetu.com/n4890bm/288/".to_string(),
+            arc: None,
+            published_at: None,
+            revised_at: None,
+            hash: None,
+            file: crate::narou::chapter_file(288),
+        }
+    }
+
+    #[test]
+    fn an_illustration_in_a_body_becomes_a_picture_the_fetcher_can_find() {
+        let chapter = parse_chapter(NAROU_CHAPTER_ILLUSTRATED, &illustrated_meta()).unwrap();
+
+        assert_eq!(
+            chapter.nodes,
+            vec![
+                Block::Paragraph {
+                    children: vec![text(
+                        "　一方ウィンは学校に通わせてはもらえなかったが、帳簿付けの仕事を覚えるために、ハンナから文字と数字の計算だけは教わっていた。"
+                    )]
+                },
+                Block::Paragraph {
+                    children: vec![text(
+                        "　だから、ウィンが本を読んでくれるのに合わせてレティも声を揃えて読む。"
+                    )]
+                },
+                Block::Image {
+                    // Protocol-relative on the page, absolute once it is a block:
+                    // the fetcher has no page to complete it against.
+                    src: "https://8873.mitemin.net/userpageimage/viewimagebig/icode/i78408/"
+                        .to_string(),
+                    alt: Some("挿絵(By みてみん)".to_string()),
+                },
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![text(
+                        "　家庭教師が教えてくれる、ちんぷんかんぷんな内容が、ウィンと一緒だと素直に頭の中に入ってきた。"
+                    )]
+                },
+            ],
+            "the picture is a block beside the prose, not a line of characters in it"
+        );
+
+        assert!(
+            !chapter.pre_note.is_empty(),
+            "the preface of the same capture still parses: {:?}",
+            chapter.pre_note
         );
     }
 

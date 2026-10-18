@@ -10,37 +10,45 @@
 //! The adapter's job is only to say which lines are blank — Narou marks them
 //! with a `<p>` whose sole content is a `<br>`, Kakuyomu with `class="blank"`,
 //! Pixiv with a genuinely empty line. The rule itself lives here because it is
-//! the same rule, and it is applied to lines that are already blocks as well as
-//! to lines that are a paragraph each ([`from_line_blocks`]).
+//! the same rule, and every adapter arrives at it the same way
+//! ([`from_line_blocks`]).
+//!
+//! A line is not always one paragraph. An author's picture shares its line with
+//! the prose beside it, and pixiv's `[uploadedimage:…]` is the same thing typed
+//! rather than marked up, so [`from_pieces`] is where a line's content becomes
+//! blocks: prose, picture, prose, in the order they came.
 
-use wnd_core::{Block, Inline};
+use crate::inline::Piece;
+use wnd_core::Block;
 
-/// Turn lines into blocks. `None` is a blank line; `Some` is a line's content,
-/// which may itself be empty and is then dropped without counting as a blank.
-pub(crate) fn from_lines(lines: Vec<Option<Vec<Inline>>>) -> Vec<Block> {
-    from_line_blocks(
-        lines
-            .into_iter()
-            .map(|line| {
-                line.map(|children| {
-                    if children.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec![Block::Paragraph { children }]
-                    }
-                })
-            })
-            .collect(),
-    )
+/// A line's content — runs of inline nodes, and the pictures between them — as
+/// the blocks it makes.
+///
+/// Prose beside a picture is split around it, because a block cannot live inside
+/// a paragraph and the picture goes where the author put it. This is the rule
+/// pixiv's `[uploadedimage:…]` and three sites' `<img>` share, so it is written
+/// once.
+pub(crate) fn from_pieces(pieces: Vec<Piece>) -> Vec<Block> {
+    let mut blocks = Vec::new();
+    for piece in pieces {
+        match piece {
+            Piece::Inline(nodes) if !nodes.is_empty() => {
+                blocks.push(Block::Paragraph { children: nodes });
+            }
+            Piece::Inline(_) => {}
+            Piece::Image { src, alt } => blocks.push(Block::Image { src, alt }),
+        }
+    }
+    blocks
 }
 
-/// The same rule, for an adapter whose line already knows what blocks it is.
+/// The blank-line rule, for an adapter whose line already knows what blocks it
+/// is.
 ///
-/// Pixiv is why this exists: its `[uploadedimage:…]` marker is a block of its
-/// own sharing a line with prose, where every other site's line is exactly one
-/// paragraph. Whether a line becomes one paragraph or several is the adapter's
-/// business; what a blank line means is this module's, and it is the same rule
-/// either way.
+/// A line that holds a picture is more than one block, and pixiv's
+/// `[uploadedimage:…]` marker is the same from the other direction: whether a
+/// line becomes one paragraph or several is the adapter's business. What a blank
+/// line means is this module's, and it is the same rule either way.
 pub(crate) fn from_line_blocks(lines: Vec<Option<Vec<Block>>>) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut blanks = 0usize;
@@ -64,6 +72,7 @@ pub(crate) fn from_line_blocks(lines: Vec<Option<Vec<Block>>>) -> Vec<Block> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wnd_core::Inline;
 
     fn text(value: &str) -> Inline {
         Inline::Text {
@@ -71,13 +80,35 @@ mod tests {
         }
     }
 
-    fn line(value: &str) -> Option<Vec<Inline>> {
-        Some(vec![text(value)])
+    /// One line of prose.
+    fn line(value: &str) -> Option<Vec<Block>> {
+        Some(vec![Block::Paragraph {
+            children: vec![text(value)],
+        }])
+    }
+
+    fn image(src: &str) -> Block {
+        Block::Image {
+            src: src.to_string(),
+            alt: None,
+        }
+    }
+
+    /// One run of prose, as a line hands it over.
+    fn run(value: &str) -> Piece {
+        Piece::Inline(vec![text(value)])
+    }
+
+    fn picture(src: &str, alt: Option<&str>) -> Piece {
+        Piece::Image {
+            src: src.to_string(),
+            alt: alt.map(str::to_string),
+        }
     }
 
     #[test]
     fn blank_line_rules_are_applied_directly() {
-        let blocks = from_lines(vec![
+        let blocks = from_line_blocks(vec![
             None,
             None,
             line("a"),
@@ -108,7 +139,7 @@ mod tests {
 
     #[test]
     fn three_blank_lines_are_still_one_scene_break() {
-        let blocks = from_lines(vec![line("a"), None, None, None, line("b")]);
+        let blocks = from_line_blocks(vec![line("a"), None, None, None, line("b")]);
         assert_eq!(
             blocks,
             vec![
@@ -128,7 +159,7 @@ mod tests {
     fn a_line_whose_content_is_empty_is_not_a_blank_line() {
         // An empty paragraph is markup noise; only an explicit blank counts, or
         // a stray `<p></p>` would silently become a scene break.
-        let blocks = from_lines(vec![line("a"), Some(Vec::new()), line("b")]);
+        let blocks = from_line_blocks(vec![line("a"), Some(Vec::new()), line("b")]);
         assert_eq!(
             blocks,
             vec![
@@ -144,7 +175,7 @@ mod tests {
 
     #[test]
     fn a_page_of_nothing_but_blanks_is_empty() {
-        assert_eq!(from_lines(vec![None, None, None]), Vec::new());
+        assert_eq!(from_line_blocks(vec![None, None, None]), Vec::new());
     }
 
     #[test]
@@ -198,37 +229,46 @@ mod tests {
     }
 
     #[test]
-    fn from_lines_and_from_line_blocks_agree_on_the_simple_case() {
-        // `from_lines` is the one-line-one-paragraph shorthand for the same
-        // rule; if the two ever disagree, every site gets a different rule.
-        let lines = vec![
-            None,
-            line("a"),
-            None,
-            line("b"),
-            None,
-            None,
-            line("c"),
-            None,
-        ];
-        let shorthand = from_lines(lines);
-        let explicit = from_line_blocks(vec![
-            None,
-            Some(vec![Block::Paragraph {
-                children: vec![text("a")],
-            }]),
-            None,
-            Some(vec![Block::Paragraph {
-                children: vec![text("b")],
-            }]),
-            None,
-            None,
-            Some(vec![Block::Paragraph {
-                children: vec![text("c")],
-            }]),
-            None,
-        ]);
+    fn prose_beside_a_picture_is_split_around_it() {
+        assert_eq!(
+            from_pieces(vec![
+                run("前の文"),
+                picture("images/1.png", Some("挿絵")),
+                run("後の文"),
+            ]),
+            vec![
+                Block::Paragraph {
+                    children: vec![text("前の文")]
+                },
+                Block::Image {
+                    src: "images/1.png".to_string(),
+                    alt: Some("挿絵".to_string())
+                },
+                Block::Paragraph {
+                    children: vec![text("後の文")]
+                },
+            ]
+        );
+    }
 
-        assert_eq!(shorthand, explicit);
+    #[test]
+    fn a_line_that_is_only_a_picture_is_only_a_picture() {
+        assert_eq!(
+            from_pieces(vec![picture("images/1.png", None)]),
+            vec![image("images/1.png")]
+        );
+    }
+
+    #[test]
+    fn a_run_with_nothing_in_it_is_not_a_paragraph() {
+        assert_eq!(
+            from_pieces(vec![
+                Piece::Inline(Vec::new()),
+                picture("images/1.png", None),
+                Piece::Inline(Vec::new()),
+            ]),
+            vec![image("images/1.png")]
+        );
+        assert_eq!(from_pieces(Vec::new()), Vec::new());
     }
 }

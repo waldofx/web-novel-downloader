@@ -10,17 +10,21 @@
 //! `｜` or `《` with no usable base stays literal text: showing a stray mark is
 //! better than dropping a character the author typed.
 //!
-//! The HTML around the text — `<ruby>`, `<strong>`, `<em>`, `<a>` — is the same
-//! as everywhere else and is handled by [`crate::inline`].
+//! The HTML around the text — `<ruby>`, `<strong>`, `<em>`, `<a>`, `<img>` — is
+//! the same as everywhere else and is handled by [`crate::inline`].
 
-use crate::inline::{self, TextDecoder};
+use crate::inline::{self, Piece, TextDecoder};
 use scraper::ElementRef;
 use wnd_core::Inline;
 
-/// The inline content of one element, decoding Narou's notation too.
-pub(super) fn inlines_of(element: &ElementRef) -> Vec<Inline> {
+/// The content of one element, decoding Narou's notation too.
+///
+/// `page` is the chapter the content was found on, for the one thing the markup
+/// does not carry: a picture's `src`, which Narou writes protocol-relative
+/// (`//8873.mitemin.net/…`).
+pub(super) fn pieces_of(element: &ElementRef, page: &str) -> Vec<Piece> {
     let decode: TextDecoder = parse_notation;
-    inline::of(element, decode)
+    inline::pieces_of(element, decode, page)
 }
 
 /// Decode Narou's plain-text ruby and emphasis notation into inline nodes.
@@ -197,15 +201,18 @@ mod tests {
         assert_eq!(parse_notation("《開き》なし"), vec![text("《開き》なし")]);
     }
 
-    /// The HTML walk is shared, but these two tests go through *this* adapter's
-    /// entry point, so they fail if Narou ever stops decoding its own notation.
+    /// The text of one element, with *this* adapter's notation decoder, so these
+    /// tests fail if Narou ever stops decoding its own notation.
+    ///
+    /// A picture is not text and the walk that carries one is the shared one;
+    /// the test below asks for pieces instead.
     fn chapter_text(html: &str) -> Vec<Inline> {
         let document = Html::parse_document(&format!(
             r#"<!DOCTYPE html><html><body><div id="f">{html}</div></body></html>"#
         ));
         let selector = Selector::parse("#f").expect("selector");
         let element = document.select(&selector).next().expect("wrapper");
-        inlines_of(&element)
+        inline::of(&element, parse_notation)
     }
 
     #[test]
@@ -261,6 +268,27 @@ mod tests {
                     reading: "たんご".into()
                 },
                 text("です。"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_picture_in_a_paragraph_reaches_the_adapter_as_a_picture() {
+        let document = Html::parse_document(
+            r#"<!DOCTYPE html><html><body><div id="f">前<img src="//host.test/i/1/big.png" alt="挿絵" />後</div></body></html>"#,
+        );
+        let selector = Selector::parse("#f").expect("selector");
+        let element = document.select(&selector).next().expect("wrapper");
+
+        assert_eq!(
+            pieces_of(&element, "https://ncode.syosetu.com/n4890bm/288/"),
+            vec![
+                Piece::Inline(vec![text("前")]),
+                Piece::Image {
+                    src: "https://host.test/i/1/big.png".to_string(),
+                    alt: Some("挿絵".to_string()),
+                },
+                Piece::Inline(vec![text("後")]),
             ]
         );
     }

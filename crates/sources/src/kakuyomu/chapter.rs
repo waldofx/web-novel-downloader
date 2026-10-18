@@ -20,18 +20,23 @@
 //! The body is HTML only: an episode page carries no `__NEXT_DATA__` snapshot,
 //! which is why this adapter needs both idioms.
 //!
-//! Not handled yet: illustrations inside a body, and episodes behind Kakuyomu's
-//! paywall — the first is an image pipeline (see #18), the second would surface
-//! as the missing body below rather than as a partial chapter.
+//! Kakuyomu does not allow a picture in an episode at all — its own help centre
+//! says images cannot be placed on an episode page, and every `<img>` on one is
+//! the header, a promotion or the ad slot. The body container is therefore the
+//! boundary, and a picture that ever appears inside it is handled by the shared
+//! walk rather than by a rule of this adapter's own.
+//!
+//! Not handled yet: episodes behind Kakuyomu's paywall, which surface as the
+//! missing body below rather than as a partial chapter.
 
 use crate::SourceError;
 use crate::blocks;
 use crate::dom::{element_text, is_class};
-use crate::inline;
+use crate::inline::{self, Piece};
 use crate::selectors::selector;
 use scraper::{ElementRef, Html, Node, Selector};
 use std::sync::LazyLock;
-use wnd_core::{Chapter, ChapterMeta, Inline};
+use wnd_core::{Block, Chapter, ChapterMeta};
 
 selector!(SEL_BODY, "div.widget-episodeBody");
 selector!(SEL_PARAGRAPH, "p");
@@ -44,7 +49,7 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
 
     for container in document.select(&SEL_BODY) {
         containers += 1;
-        chapter.nodes = blocks::from_lines(body_lines(&container));
+        chapter.nodes = blocks::from_line_blocks(body_lines(&container, &meta.url));
     }
 
     if containers == 0 {
@@ -57,17 +62,23 @@ pub(super) fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, S
 }
 
 /// Each line of the body, as `None` for a blank line.
-fn body_lines(container: &ElementRef) -> Vec<Option<Vec<Inline>>> {
+fn body_lines(container: &ElementRef, page: &str) -> Vec<Option<Vec<Block>>> {
     let mut lines = Vec::new();
 
     for paragraph in container.select(&SEL_PARAGRAPH) {
+        let pieces = inline::pieces_of(&paragraph, inline::plain_text, page);
         // The class is the site's own statement that the paragraph is blank; a
         // paragraph whose text is empty is blank by inspection. Both are needed:
         // a blank line holding nothing but an ideographic space looks like text.
-        if is_class(&paragraph, "blank") || element_text(&paragraph).trim_ascii().is_empty() {
+        // A paragraph holding a picture is neither, however little text it has,
+        // or the picture would read as a blank and be dropped.
+        if is_class(&paragraph, "blank")
+            || (element_text(&paragraph).trim_ascii().is_empty()
+                && !pieces.iter().any(Piece::is_image))
+        {
             lines.extend(std::iter::repeat_n(None, blank_lines(&paragraph)));
         } else {
-            lines.push(Some(inline::of(&paragraph, inline::plain_text)));
+            lines.push(Some(blocks::from_pieces(pieces)));
         }
     }
     lines
@@ -87,7 +98,7 @@ fn blank_lines(paragraph: &ElementRef) -> usize {
 mod tests {
     use super::*;
     use crate::fixtures::KAKUYOMU_CHAPTER;
-    use wnd_core::Block;
+    use wnd_core::Inline;
 
     fn text(value: &str) -> Inline {
         Inline::Text {
@@ -197,6 +208,16 @@ mod tests {
                 "`{chrome}` is outside the body container, got: {rendered}"
             );
         }
+        // The header's logos are `<img alt="カクヨム">`, a tracker is `<img>` in
+        // a `<noscript>`, and the site allows no picture in an episode at all
+        // (see the module docs) — so nothing on this page is the author's.
+        assert!(
+            !chapter
+                .nodes
+                .iter()
+                .any(|block| matches!(block, Block::Image { .. })),
+            "a logo is not an illustration: {rendered}"
+        );
         assert!(
             chapter.pre_note.is_empty() && chapter.post_note.is_empty(),
             "Kakuyomu has no preface or afterword: the author writes those in the body"
@@ -241,5 +262,42 @@ mod tests {
         let chapter = parse_chapter(html, &meta()).expect("an empty body");
 
         assert!(chapter.nodes.is_empty());
+    }
+
+    #[test]
+    fn a_picture_inside_the_body_container_is_the_author_s_picture() {
+        // Kakuyomu allows no picture in an episode, so no capture holds one and
+        // this fragment is written rather than captured (see the module docs).
+        // The walk is shared, and the container is the boundary: a picture that
+        // ever appears inside it is the author's, must not read as a blank line,
+        // and takes its prose apart around it.
+        let html = r#"<!DOCTYPE html><html><body>
+            <div class="widget-episodeBody">
+              <p id="p1">まえ<img src="//host.test/i/1.png" alt="挿絵" />あと</p>
+              <p id="p2"><img src="//host.test/i/2.png" alt="" /></p>
+              <p id="p3" class="blank"><br /></p>
+            </div></body></html>"#;
+        let chapter = parse_chapter(html, &meta()).expect("the body parses");
+
+        assert_eq!(
+            chapter.nodes,
+            vec![
+                Block::Paragraph {
+                    children: vec![text("まえ")]
+                },
+                Block::Image {
+                    src: "https://host.test/i/1.png".to_string(),
+                    alt: Some("挿絵".to_string())
+                },
+                Block::Paragraph {
+                    children: vec![text("あと")]
+                },
+                Block::Image {
+                    src: "https://host.test/i/2.png".to_string(),
+                    alt: None
+                },
+            ],
+            "a picture splits the paragraph, and a picture on its own is a line"
+        );
     }
 }

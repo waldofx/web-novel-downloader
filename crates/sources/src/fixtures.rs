@@ -18,6 +18,14 @@ pub(crate) const NAROU_CHAPTER: &str = include_str!("../tests/fixtures/narou/cha
 /// table-of-contents page.
 pub(crate) const NAROU_SHORT_STORY: &str = include_str!("../tests/fixtures/narou/short-story.html");
 
+/// A chapter with an illustration in its body, trimmed from a real capture to
+/// the lines around it: the picture is a paragraph of its own, wrapped in an
+/// `<a>` that points at the same picture, and its `src` is **protocol-relative**
+/// (`//8873.mitemin.net/…`) — which is why an adapter has to resolve it against
+/// the page rather than pass it on.
+pub(crate) const NAROU_CHAPTER_ILLUSTRATED: &str =
+    include_str!("../tests/fixtures/narou/chapter-illustrated.html");
+
 /// A Kakuyomu work page grouped into arcs (章): two chapters of two episodes
 /// each, the author behind a reference, a catchphrase and content flags the
 /// adapter deliberately ignores, and a cover the page does not have.
@@ -41,6 +49,18 @@ pub(crate) const HAMELN_WORK: &str = include_str!("../tests/fixtures/hameln/work
 
 /// A Hameln chapter page: a title and a body in `#honbun`, with `<ruby>`.
 pub(crate) const HAMELN_CHAPTER: &str = include_str!("../tests/fixtures/hameln/chapter.html");
+
+/// A Hameln body with an illustration in it, trimmed from the capture above to
+/// the lines around the picture.
+///
+/// The picture's markup is this site's own, captured verbatim from the same
+/// work's **synopsis** (`work.html`) — where Hameln's illustrations also live —
+/// because `syosetu.org` was unreachable from the machine that wrote this
+/// fixture. Two things in it are Hameln's and only Hameln's: the `alt` is on the
+/// **`<a>`** rather than on the `<img>`, and the `<a>` carries `name="img"`.
+/// The line it sits on is a `<p id="N">`, which is what a Hameln body is made of.
+pub(crate) const HAMELN_CHAPTER_ILLUSTRATED: &str =
+    include_str!("../tests/fixtures/hameln/chapter-illustrated.html");
 
 /// One novel as Pixiv's `/ajax/novel/{id}` answers it: the work's metadata, its
 /// tags as objects, the series it belongs to (`seriesId` as a *number*), an
