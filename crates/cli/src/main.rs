@@ -379,10 +379,22 @@ fn session_cmd(action: SessionAction, session_dir: Option<&Path>) -> Result<u8, 
                     cookies
                 }
             };
-            let hosts = if host.is_empty() {
-                wnd_core::session::hosts_of(&cookies)
+            let (cookies, hosts) = if host.is_empty() {
+                let hosts = wnd_core::session::hosts_of(&cookies);
+                (cookies, hosts)
             } else {
-                host
+                // A whole-jar export is the common case; keep only the cookies
+                // for the hosts the session names, so the file stays small and
+                // the per-host rule has less to consider.
+                let filtered: Vec<wnd_core::session::cookie::Cookie> = cookies
+                    .into_iter()
+                    .filter(|cookie| {
+                        host.iter().any(|named| {
+                            wnd_core::session::cookie::host_is_covered(named, &cookie.domain)
+                        })
+                    })
+                    .collect();
+                (filtered, host)
             };
             let session = Session::new(name, hosts, cookies);
             let path = store.save(&session).map_err(|error| error.to_string())?;
