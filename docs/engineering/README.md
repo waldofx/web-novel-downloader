@@ -14,8 +14,9 @@ Read in this order the first time:
 5. [sources.md](sources.md) — the site roadmap, and how to add an adapter
 6. [export.md](export.md) — EPUB, TXT and Markdown, and why the output is
    reproducible
-7. [testing.md](testing.md) — how tests are run, and which ones need the network
-8. [gotchas.md](gotchas.md) — **read this before debugging anything**
+7. [gui.md](gui.md) — the desktop window, and how little of it there is
+8. [testing.md](testing.md) — how tests are run, and which ones need the network
+9. [gotchas.md](gotchas.md) — **read this before debugging anything**
 
 ## The one rule
 

@@ -14,8 +14,9 @@ download` fetches a novel and its chapters into a structured directory, `nvd
 update` fetches only what is new or changed, `nvd export` turns one into EPUB,
 TXT or Markdown, and `nvd info` describes a directory you already have.
 Illustrations come down too, cover included, and land in `images/` beside the
-chapters that point at them. Other sources are next — see the
-[roadmap](docs/engineering/architecture.md#roadmap).
+chapters that point at them. There is also a **desktop window** (`nvd-app`) over
+the same library, for when a terminal is not wanted. Other sources are next — see
+the [roadmap](docs/engineering/architecture.md#roadmap).
 
 | | |
 | --- | --- |
@@ -36,7 +37,14 @@ nvd update ./my-novel                         # only new or changed chapters
 ```
 
 Run `nvd <command> --help` for the flags, or read
-[getting started](docs/guide/getting-started.md).
+[getting started](docs/guide/getting-started.md). For the window instead of the
+command line:
+
+```bash
+cargo run -p wnd-gui                          # the `nvd-app` window
+```
+
+See [the guide](docs/guide/app.md) and [gui.md](docs/engineering/gui.md).
 
 ## Format at a glance
 

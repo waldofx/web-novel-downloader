@@ -105,6 +105,18 @@ version away from coming back, and the next person will search for the *symptom*
 | Testing the CLI looks like it needs `assert_cmd`/`escargot` | Cargo already tells an integration test where its own binary is | `env!("CARGO_BIN_EXE_nvd")` in `crates/cli/tests/cli.rs`. `Command::output()` also captures raw UTF-8 bytes, which sidesteps the console-encoding trouble described above |
 | A CLI test asserts "non-zero" and gets `2` | `clap` exits `2` for a usage error before your code runs | Assert `2` for a rejected flag or value and `1` for an application failure. Collapsing them into "non-zero" would hide a broken argument definition |
 
+## The desktop app
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| A `tauri` test binary refuses to start at all — `STATUS_ENTRYPOINT_NOT_FOUND` (`0xc0000139`) even for `--list` — while the app binary runs fine | linking Tauri's runtime pulls in `comctl32` imports that exist only in Common Controls **6**, and the app binary gets a manifest from `tauri-build` that a test exe never gets | Do not test through `tauri::test`. Keep what needs testing in `apps/gui/src/job.rs`, where there is no Tauri type to link, and check the front end against the command layer by reading both (`apps/gui/tests/ui.rs`). See [gui.md](gui.md) |
+| `cargo build -p wnd-gui` cannot find the front end although `ui/` sits beside `tauri.conf.json` | `frontendDist` resolves relative to the **config file**, not the crate or the workspace root | Keep the three files in `apps/gui/ui`. `tests/ui.rs` asserts `frontendDist` is the directory those tests read, so pointing it elsewhere to experiment cannot be forgotten |
+| The window comes up blank with nothing to show for it, and a webview has no console to read | `app.js` throws on the first missing element or unknown command, and by then nothing visible has happened | Assert the names from Rust: every element id in the page, every command against `generate_handler!`, and the channel name — `apps/gui/tests/ui.rs`. A blank window that passes the gate is then a broken *page*, not a broken name |
+| A novel's title is rendered into the page and could carry markup a stranger wrote | `innerHTML` invites exactly that, and the CSP does not restrain the page itself | Everything the front end writes from a site goes through `textContent`. The CSP (`default-src 'self'`, no inline script or style) is the second line of defence, never the first |
+| An event the front end listens on never arrives, while the command that emits it returns fine | capabilities are granted per **window label**, and a label that matches nothing grants nothing | Keep the label (`main`) in step between `tauri.conf.json` and `capabilities/default.json`. An unknown *permission* fails the build loudly; a wrong label is silent |
+| A manual check that reports through `document.title` shows nothing in the window's title | Tauri takes the window title from the configuration and does not follow the page's | Report through something that leaves the process — `apps/gui/tests/ui_manual_check.js` encodes pass/fail as the export *format*, because that writes a file |
+| `rfd`'s folder dialog opens behind the app, or is not modal to it | a dialog with no parent belongs to nothing | `set_parent(&window)`: Tauri's `Window` implements both `HasWindowHandle` and `HasDisplayHandle`, so no `raw-window-handle` dependency is needed |
+
 ## Format and storage
 
 | Symptom | Cause | Fix / workaround |

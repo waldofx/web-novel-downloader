@@ -54,6 +54,16 @@ No extension needed. `--session <name>` on `download`/`update` then uses it.
 For most sites, no. Pixiv generally needs a logged-in session; cookies stay on
 your machine, outside the repository, and are never published.
 
+### Is there a window, or only the command line?
+
+Both. `cargo run -p wnd-gui` starts a small desktop app over exactly the same
+library: paste the URL, choose a folder, press **Download**, and watch the
+chapters arrive. It writes the same folder `nvd` writes — use either one, on the
+same folder, at different times. The app always respects `robots.txt` and never
+refuses a work because of its rating. It does not *create* sessions (that is
+`nvd session save`), and it cannot cancel a run already started. See
+[the window](app.md).
+
 ### Why is it so slow?
 
 On purpose. A site that gets hammered will block the tool — or everyone. The

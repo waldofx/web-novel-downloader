@@ -99,7 +99,49 @@ paste the output. "Should work" is not evidence.
 | Pixiv's text notation: `[newpage]` joining, furigana, links, the author's `[chapter:]` headings, uploaded and referenced images, and the markers that stay literal | `sources/src/pixiv/content.rs` | a captured body, block for block |
 | Pixiv URL forms, work expansion, chapter numbering and the URLs a manifest holds | `sources/src/pixiv/mod.rs` | pure functions over the answers above; the work/listing paths themselves are covered by the live tests |
 | the whole pipeline under the real binary: exit codes, which stream output goes to, flags, `--help` | `crates/cli/tests/cli.rs` | runs `nvd` itself, so no library test can cover it. Offline, except one `#[ignore]`d test that downloads two chapters for real |
+| what the window asks the library for — a URL without a scheme, validation before a thread, every response's shape, resume, update, `info`, the session picker — and the report it renders | `apps/gui/tests/job.rs` | an in-memory adapter, a temp directory, no Tauri and no window |
+| the request JSON exactly as the front end sends it: camelCase keys, the options spread beside the request's own fields, and what is assumed when a field is absent | `apps/gui/src/job.rs` | unit tests; the two files on either side of the IPC have to agree on this shape |
+| one job at a time, a poisoned flag not blocking every later job, and a run ending in exactly one `done` or `failed` | `apps/gui/src/lib.rs` | unit tests. The Tauri half of that file is a handful of lines and is not separately tested — see the note below |
+| the front end against the command layer: every command `app.js` invokes is one `generate_handler!` registers, the channel name, and every element id it looks up being in the page | `apps/gui/tests/ui.rs` | reads both sides. A window cannot be clicked by a test, and these are the disagreements that would otherwise arrive as a blank window with an error nobody can see |
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |
 | Kakuyomu against the real site, including the 1069-episode work | `sources/tests/kakuyomu_live.rs` | `#[ignore]`d |
 | Pixiv against the real site: a series URL expanding to every chapter it states, and a standalone novel's reader pages arriving whole | `sources/tests/pixiv_live.rs` | `#[ignore]`d. Both tests re-read the API answer the manifest points at and compare *counts* — the two ways this adapter fails quietly are a series cut to one chapter and a chapter cut to one reader page |
 | An illustrated pixiv series, downloaded whole: the cover and the in-text pictures, every hash verified against bytes a real server sent, a second run fetching nothing, and `--check` finding nothing changed | `download/tests/pixiv_live.rs` | `#[ignore]`d. This is the one test that proves the `Referer`, because `i.pximg.net` answers `403` without it and would fail every assertion at once |
+
+## The desktop app's one manual check
+
+`apps/gui/ui/` is three static files, and a window is the one thing here a blast
+of `cargo test` cannot click. What the committed tests cover is that the front
+end asks for the right things and that it agrees with the command layer. What
+they cannot cover is that the page *loads*, that its event handler renders, and
+that a round trip closes.
+
+Tauri's own mock runtime would test that, and is not usable here: linking the
+runtime into a test binary pulls in `comctl32` imports that need a manifest only
+the *app* gets (see [gotchas.md](gotchas.md)). So it was checked once, by hand,
+and the harness is kept at `apps/gui/tests/ui_manual_check.js`, because writing
+it again costs an afternoon:
+
+1. Copy `apps/gui/ui/` to `apps/gui/ui-manual/`, and add
+   `<script src="ui_manual_check.js" defer></script>` to the copy's
+   `index.html`, after `app.js`. Copy the file there too — it is not loaded from
+   `tests/`.
+2. Set `build.frontendDist` in `apps/gui/tauri.conf.json` to `ui-manual`, and
+   edit the output folder and the novel URL at the top of the check.
+3. `cargo build -p wnd-gui` and run `target/debug/nvd-app.exe`. The check runs
+   itself: it drives the shipped `onEvent` with the payloads a job emits and
+   asserts what the page then shows, then downloads two chapters of a real novel
+   through the real commands, and — from the `done` payload it received — asks
+   for an export. **A `.txt` in the novel's `exports/` means every check passed;
+   a `.md` means one of them failed**, and the export is the only channel out of
+   a window that is not being watched.
+4. Put `frontendDist` back to `ui` and delete `ui-manual/`. `tests/ui.rs` asserts
+   the configuration points at `ui`, so forgetting this fails the gate rather
+   than shipping a UI that is not the one the tests read.
+
+That is what proved, for this change, that the page loads, that `onEvent` renders
+the plan, the chapter rows, the counts, the missing picture and the report, that
+`invoke` reaches the command layer and returns something the front end can use,
+and that the event payload the job emits is the payload the front end reads. The
+folder dialog and a real button click are still only as tested as a manual run
+makes them.
