@@ -22,6 +22,12 @@
 //!    valid directory that resumes — and a chapter is only skipped when the
 //!    file on disk still hashes to what the manifest recorded.
 //!
+//! Images are the second half of step 4, and they come *before* the chapter is
+//! written: an adapter leaves a picture as a URL, since only a fetcher can put
+//! one on disk, and a chapter is not written until its blocks point at the stored
+//! copies. [`images`] explains why an image that cannot be fetched is reported
+//! rather than fatal.
+//!
 //! # Updating, which is the same sequence with a memory
 //!
 //! [`update`] reads the novel's URL out of the directory's own manifest, so it
@@ -45,6 +51,8 @@ use url::Url;
 use wnd_core::store::storage::hash_json;
 use wnd_core::{HttpClient, Manifest, NovelDir};
 use wnd_sources::{Source, SourceError, find};
+
+mod images;
 
 /// What to fetch, and how careful to be.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -80,6 +88,17 @@ pub enum Progress {
     /// One chapter was fetched to be compared and turned out to be unchanged
     /// (`nvd update --check`). Nothing was written.
     Checked { index: u32, title: String },
+    /// One image was fetched and written into `images/`.
+    ///
+    /// An image that was already stored is not reported: nothing happened. The
+    /// file name says what it is — `images/cover.png` is the work's cover, and
+    /// `images/0003-1.png` is the first picture of chapter three.
+    ImageFetched { file: String, bytes: u64 },
+    /// One image could not be fetched — a `404`, a filter, a dead host.
+    ///
+    /// Reported, never fatal: the chapter keeps the URL the source stated, so
+    /// losing the picture does not cost the text around it.
+    ImageMissing { url: String, reason: String },
 }
 
 /// What a download did.
@@ -91,8 +110,13 @@ pub struct Summary {
     pub chapters_total: usize,
     pub chapters_fetched: usize,
     pub chapters_skipped: usize,
-    /// Bytes of chapter content written. Manifest bookkeeping is not counted, so
-    /// a run that only skipped reports zero.
+    /// Images fetched into `images/`. Already-stored images are not counted.
+    pub images_fetched: usize,
+    /// Images that could not be fetched. Each one keeps its URL in its chapter,
+    /// so a later run tries again.
+    pub images_missing: usize,
+    /// Bytes of chapter and image content written. Manifest bookkeeping is not
+    /// counted, so a run that only skipped reports zero.
     pub bytes_written: u64,
     pub output_dir: PathBuf,
 }
@@ -147,7 +171,12 @@ pub struct UpdateSummary {
     pub chapters_checked: usize,
     /// Chapters in the directory that the index no longer lists. Never deleted.
     pub removed: Vec<RemovedChapter>,
-    /// Bytes of chapter content written. Manifest bookkeeping is not counted.
+    /// Images fetched into `images/`. Already-stored images are not counted.
+    pub images_fetched: usize,
+    /// Images that could not be fetched. Each one keeps its URL in its chapter.
+    pub images_missing: usize,
+    /// Bytes of chapter and image content written. Manifest bookkeeping is not
+    /// counted.
     pub bytes_written: u64,
     pub output_dir: PathBuf,
 }
@@ -156,9 +185,12 @@ impl UpdateSummary {
     /// Whether the run found nothing at all: nothing to fetch, nothing gone.
     ///
     /// A scheduled run can tell this apart from a failure without reading the
-    /// output — it is what `nvd update` exits `3` for.
+    /// output — it is what `nvd update` exits `3` for. An image that could not be
+    /// fetched deliberately does *not* count: it will fail again next run, and a
+    /// directory that keeps saying "there is news" about a broken link forever
+    /// would make `3` useless.
     pub fn up_to_date(&self) -> bool {
-        self.chapters_fetched == 0 && self.removed.is_empty()
+        self.chapters_fetched == 0 && self.images_fetched == 0 && self.removed.is_empty()
     }
 }
 
@@ -219,6 +251,8 @@ pub fn download_from(
         chapters_total: outcome.total,
         chapters_fetched: outcome.fetched,
         chapters_skipped: outcome.skipped,
+        images_fetched: outcome.images.fetched,
+        images_missing: outcome.images.missing,
         bytes_written: outcome.bytes_written,
         output_dir: output.to_path_buf(),
     })
@@ -292,6 +326,8 @@ fn update_with(
         chapters_skipped: outcome.skipped,
         chapters_checked: outcome.checked,
         removed,
+        images_fetched: outcome.images.fetched,
+        images_missing: outcome.images.missing,
         bytes_written: outcome.bytes_written,
         output_dir: dir.to_path_buf(),
     })
@@ -346,6 +382,7 @@ struct Outcome {
     fetched: usize,
     skipped: usize,
     checked: usize,
+    images: images::Stored,
     bytes_written: u64,
 }
 
@@ -372,6 +409,14 @@ fn run(
     let previous = previous.filter(|stored| stored.source.novel_url == manifest.source.novel_url);
     let stored_chapter =
         |chapter: &wnd_core::ChapterMeta| previous.and_then(|s| s.chapter(chapter.index));
+
+    // The images the directory already holds are a record of what is in
+    // `images/`, and this run amends it rather than starting over: a chapter
+    // that is skipped is not looked at again, so its images would otherwise be
+    // forgotten — and forgotten images are fetched twice.
+    if let Some(stored) = previous {
+        manifest.images = stored.images.clone();
+    }
 
     let plan: Vec<Plan> = manifest
         .chapters
@@ -418,8 +463,37 @@ fn run(
         fetched: 0,
         skipped: 0,
         checked: 0,
+        images: images::Stored::default(),
         bytes_written: 0,
     };
+
+    // Whatever is not a chapter goes first: a cover belongs to the work rather
+    // than to any chapter, and repairing what the plan cannot see has to happen
+    // before the loop, because a chapter that is skipped is never looked into.
+    // Doing both before the first chapter means a failure later costs neither.
+    let referer = source.image_referer();
+    let mut covers = images::Stored::default();
+    images::repair(
+        &dir,
+        fetch,
+        referer,
+        &mut manifest,
+        &mut covers,
+        on_progress,
+    );
+    images::store_cover(
+        &dir,
+        fetch,
+        referer,
+        &mut manifest,
+        &mut covers,
+        on_progress,
+    );
+    outcome.images.merge(covers);
+    outcome.bytes_written += covers.bytes;
+    if covers.fetched > 0 {
+        dir.write_manifest(&manifest)?;
+    }
 
     for (position, step) in plan.iter().enumerate() {
         let index = manifest.chapters[position].index;
@@ -431,7 +505,23 @@ fn run(
             continue;
         }
 
-        let chapter = source.chapter(fetch, &manifest.chapters[position])?;
+        let mut chapter = source.chapter(fetch, &manifest.chapters[position])?;
+
+        // Store the pictures before anything compares or writes the chapter:
+        // what is written, and what a later `--check` compares against, is the
+        // chapter as it will be stored, with paths where the URLs were.
+        let mut stored = images::Stored::default();
+        images::store_chapter_images(
+            &dir,
+            fetch,
+            referer,
+            &mut manifest,
+            &mut chapter,
+            &mut stored,
+            on_progress,
+        );
+        outcome.images.merge(stored);
+        outcome.bytes_written += stored.bytes;
 
         // A checked chapter is written only if it is not what the manifest
         // already describes.

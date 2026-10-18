@@ -141,6 +141,20 @@ impl Page {
     }
 }
 
+/// Raw bytes, and what they are.
+///
+/// [`Page`] is for something that gets parsed; this is for something that gets
+/// *stored*. The media type is the reason it exists: a file's name is how every
+/// reader afterwards decides how to open it, and a server that says
+/// `image/webp` knows better than the URL does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Asset {
+    /// The body, exactly as it arrived.
+    pub bytes: Vec<u8>,
+    /// Content type as sent, parameters and all.
+    pub content_type: Option<String>,
+}
+
 /// A polite HTTP client.
 #[derive(Debug)]
 pub struct HttpClient {
@@ -210,7 +224,7 @@ impl HttpClient {
     /// challenge is the one answer refused here, because a header says so and
     /// nothing else sends it.
     pub fn get_page(&self, url: &str) -> Result<Page> {
-        let response = self.send(url)?;
+        let response = self.send(url, None)?;
         let status = response.status().as_u16();
         let final_url = response.url().to_string();
         let content_type = content_type(&response);
@@ -261,13 +275,29 @@ impl HttpClient {
 
     /// Fetch `url` as raw bytes, for images and other binary assets.
     pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>> {
-        let response = self.send(url)?;
+        Ok(self.get_asset(url, None)?.bytes)
+    }
+
+    /// The same, carrying the facts needed to *store* what came back.
+    ///
+    /// `referer` is the page the request is made from, and only the sites that
+    /// need it say so: pixiv serves its images from `i.pximg.net`, which answers
+    /// `403` to a request that does not say where it came from. Nothing else is
+    /// added on the caller's behalf — the host is still subject to the delay,
+    /// `robots.txt` and the retry rules, and the value is the URL a browser
+    /// would have been on, not a disguise.
+    pub fn get_asset(&self, url: &str, referer: Option<&str>) -> Result<Asset> {
+        let response = self.send(url, referer)?;
+        let content_type = content_type(&response);
         let bytes = response.bytes().map_err(|source| Error::Network {
             url: url.to_string(),
             source,
             hint: String::new(),
         })?;
-        Ok(bytes.to_vec())
+        Ok(Asset {
+            bytes: bytes.to_vec(),
+            content_type,
+        })
     }
 
     /// Like [`HttpClient::get_page`], but reuse a body already cached under
@@ -289,7 +319,10 @@ impl HttpClient {
     }
 
     /// One GET: rate limited, robots-checked, and retried.
-    fn send(&self, url: &str) -> Result<reqwest::blocking::Response> {
+    ///
+    /// `referer`, when given, is sent as the `Referer` header — see
+    /// [`HttpClient::get_asset`] for the one caller that needs it.
+    fn send(&self, url: &str, referer: Option<&str>) -> Result<reqwest::blocking::Response> {
         let parsed =
             Url::parse(url).map_err(|error| Error::InvalidUrl(format!("{url}: {error}")))?;
         let host = parsed.host_str().unwrap_or_default().to_string();
@@ -315,6 +348,9 @@ impl HttpClient {
             self.limiter.acquire_with(&host, delay);
 
             let mut request = self.client.get(url);
+            if let Some(referer) = referer {
+                request = request.header(reqwest::header::REFERER, referer);
+            }
             if let Some(session) = &self.session {
                 if session.covers(&host) {
                     if let Ok(parsed) = Url::parse(url) {

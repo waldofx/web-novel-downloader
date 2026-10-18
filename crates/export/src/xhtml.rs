@@ -73,7 +73,9 @@ fn text_with_breaks(nodes: &[Inline]) -> String {
 /// Block content, as the inside of a `<body>` or a `<section>`.
 ///
 /// `image_prefix` is the relative path from the document being written to the
-/// archive root, because that is what the model's `src` is relative to.
+/// archive root, because that is what a *stored* image's `src` is relative to.
+/// A `src` that is still a URL is a picture nothing fetched, and it is left
+/// absolute: prefixing it would turn it into a path to nowhere.
 pub fn blocks(blocks: &[Block], image_prefix: &str) -> String {
     let mut out = String::new();
     for block in blocks {
@@ -90,9 +92,14 @@ pub fn blocks(blocks: &[Block], image_prefix: &str) -> String {
             Block::SceneBreak => out.push_str("<hr class=\"scene-break\" />\n"),
             Block::HorizontalRule => out.push_str("<hr />\n"),
             Block::Image { src, alt } => {
+                let prefix = if src.contains("://") {
+                    ""
+                } else {
+                    image_prefix
+                };
                 let _ = writeln!(
                     out,
-                    "<img src=\"{image_prefix}{}\" alt=\"{}\" />",
+                    "<img src=\"{prefix}{}\" alt=\"{}\" />",
                     escape(src),
                     escape(alt.as_deref().unwrap_or(""))
                 );
@@ -131,5 +138,30 @@ mod tests {
         }];
 
         assert_eq!(text_with_breaks(&nodes), "one<br />\ntwo");
+    }
+
+    #[test]
+    fn a_stored_image_is_prefixed_and_a_url_is_left_alone() {
+        let stored = vec![Block::Image {
+            src: "images/0001-1.png".to_string(),
+            alt: None,
+        }];
+        let unfetched = vec![Block::Image {
+            src: "https://i.pximg.net/illust/1.png".to_string(),
+            alt: Some("挿絵".to_string()),
+        }];
+
+        // A path is relative to the novel directory, and the document is not.
+        assert_eq!(
+            blocks(&stored, "../").trim(),
+            r#"<img src="../images/0001-1.png" alt="" />"#
+        );
+
+        // A URL is where the picture *is*: a picture nothing fetched, which
+        // `../` would turn into a path to nowhere.
+        assert_eq!(
+            blocks(&unfetched, "../").trim(),
+            r#"<img src="https://i.pximg.net/illust/1.png" alt="挿絵" />"#
+        );
     }
 }

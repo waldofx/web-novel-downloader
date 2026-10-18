@@ -60,6 +60,17 @@ pub trait Source: Send + Sync {
     /// its own age gate, and the tool does not bypass it.
     fn content_rating(&self) -> ContentRating;
 
+    /// The `Referer` this site's images have to be requested with, if any.
+    ///
+    /// Pixiv serves its illustrations from `i.pximg.net`, which answers `403` to
+    /// a request that does not say which page it came from. That is not a
+    /// disguise — it is the page a browser would have been on — and the request
+    /// is otherwise the same one the policy already allows, `robots.txt` and the
+    /// per-host delay included. Every other adapter leaves this alone.
+    fn image_referer(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Fetch the novel's metadata and chapter index.
     fn novel(&self, fetch: &HttpClient, url: &Url) -> Result<Manifest, SourceError>;
 
@@ -245,5 +256,26 @@ mod tests {
         let sources = registry();
         let url = Url::parse("https://example.com/novel/1").unwrap();
         assert!(find(&sources, &url).is_none());
+    }
+
+    #[test]
+    fn only_the_site_that_needs_a_referer_declares_one() {
+        // `i.pximg.net` answers 403 without one. Nothing else we speak to asks,
+        // and inventing a referer for a host that never did would be a claim
+        // about where the request came from that is not true.
+        let sources = registry();
+        let telling: Vec<&str> = sources
+            .iter()
+            .filter(|source| source.image_referer().is_some())
+            .map(|source| source.id())
+            .collect();
+        assert_eq!(telling, vec!["pixiv"]);
+
+        let pixiv = find(
+            &sources,
+            &Url::parse("https://www.pixiv.net/novel/show.php?id=1").unwrap(),
+        )
+        .expect("pixiv handles its own URLs");
+        assert_eq!(pixiv.image_referer(), Some("https://www.pixiv.net/"));
     }
 }

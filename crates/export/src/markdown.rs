@@ -86,11 +86,14 @@ fn blocks(blocks: &[Block], options: &ExportOptions) -> String {
             Block::SceneBreak => out.push_str("* * *\n\n"),
             Block::HorizontalRule => out.push_str("---\n\n"),
             // The file lives in exports/, but the model's `src` is relative to
-            // the novel directory, so the path has to be rewritten.
+            // the novel directory, so the path has to be rewritten. A `src` that
+            // is still a URL is a picture nothing fetched, and it stays absolute:
+            // `../https://…` is a path to nowhere.
             Block::Image { src, alt } => {
+                let prefix = if src.contains("://") { "" } else { "../" };
                 let _ = writeln!(
                     out,
-                    "![{}](../{})\n",
+                    "![{}]({prefix}{})\n",
                     escape(alt.as_deref().unwrap_or("")),
                     escape(src)
                 );
@@ -175,5 +178,31 @@ mod tests {
         assert_eq!(guard("# not a heading"), r"\# not a heading");
         assert_eq!(guard("> not a quote"), r"\> not a quote");
         assert_eq!(guard("ふつうの行"), "ふつうの行");
+    }
+
+    #[test]
+    fn a_stored_image_is_rewritten_and_a_url_is_left_alone() {
+        let options = ExportOptions::default();
+        let stored = [Block::Image {
+            src: "images/0001-1.png".to_string(),
+            alt: None,
+        }];
+        let unfetched = [Block::Image {
+            src: "https://i.pximg.net/illust/1.png".to_string(),
+            alt: Some("挿絵".to_string()),
+        }];
+
+        // The file is in exports/, the path is relative to the novel directory.
+        assert_eq!(
+            blocks(&stored, &options).trim(),
+            "![](../images/0001-1.png)"
+        );
+
+        // A URL is a picture nothing fetched; `../https://…` is a path to
+        // nowhere, so it stays absolute.
+        assert_eq!(
+            blocks(&unfetched, &options).trim(),
+            "![挿絵](https://i.pximg.net/illust/1.png)"
+        );
     }
 }

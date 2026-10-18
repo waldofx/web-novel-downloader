@@ -78,6 +78,7 @@ pub trait Source: Send + Sync {
     fn id(&self) -> &'static str;
     fn matches(&self, url: &Url) -> bool;
     fn content_rating(&self) -> ContentRating;
+    fn image_referer(&self) -> Option<&'static str>;
     fn novel(&self, fetch: &HttpClient, url: &Url) -> Result<Manifest, SourceError>;
     fn chapter(&self, fetch: &HttpClient, meta: &ChapterMeta) -> Result<Chapter, SourceError>;
 }
@@ -87,6 +88,12 @@ An earlier sketch had four calls (`novel`, `chapter_list`, `chapter`, and a
 separate metadata call). The real one collapses metadata and the chapter list
 into `novel`, because on every site we support a single table-of-contents fetch
 carries both — and splitting them would mean fetching the same page twice.
+
+`image_referer` is the one place a site is allowed to say that its pictures need
+a header to come down, and only pixiv does. An adapter's job ends at *finding* a
+picture — a cover URL, a `Block::Image` holding an absolute URL; the fetching and
+the storing belong to `wnd-download`, which is why a chapter on disk holds a path
+and an adapter's output holds a URL.
 
 Adapters receive the `HttpClient` rather than building their own, so the fetch
 policy, rate limit, robots rules, and raw cache apply uniformly. What comes back
@@ -186,7 +193,7 @@ message shows the evidence instead of picking one. See
 | **M3b** | **Sessions** — a user-owned cookie store for challenged sites (#31) | done — `nvd session save/list/delete`, `--session` on `download` and `update`; Netscape `cookies.txt` import; per-host, never logged |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | done — adapter merged; `h.` markup sharing assumed, not verified |
 | **M5** | **Pixiv** (`pixiv.net/novel`), read from the site's JSON API (#20) | done — any URL into a work downloads the work (a series URL and a novel URL inside it both give the series); a novel's reader pages are joined rather than cut short; `[[rb:]]`, `[[jumpuri:]]`, `[chapter:]` and `[uploadedimage:]` are decoded; `[pixivimage:]` is best-effort |
-| **M5b** | **Illustrations** — fetch and store the images a body references (#18) | in progress — the model, the adapters and the exports carry them; the fetcher does not yet write them into `images/` |
+| **M5b** | **Illustrations** — fetch and store the images a body references (#18) | done — an adapter leaves a picture as a URL and the downloader fetches it into `images/` as `cover.<ext>` or `<chapter>-<n>.<ext>`, records the URL and a hash in `manifest.images`, and rewrites the chapter to the path; a picture that cannot be fetched is reported and keeps its URL; pixiv's `i.pximg.net` is reached with the referer it demands |
 | **M6** | update tracking (fetch only new/changed chapters) | done — `nvd update` diffs the index against the recorded manifest; `--check` compares content where the site announces nothing |
 | **M7** | other sources (Royal Road, Scribble Hub, AO3, FFN, …) | — |
 | **M8** | CLI polish → Tauri GUI → translation stage | — |

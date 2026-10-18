@@ -78,6 +78,14 @@ impl Source for Pixiv {
         ContentRating::General
     }
 
+    /// Illustrations and covers live on `i.pximg.net`, which answers `403` to a
+    /// request that does not say it came from the site. Nothing else we ask for
+    /// needs it, and the referer is not a disguise: it is the page the picture
+    /// is shown on.
+    fn image_referer(&self) -> Option<&'static str> {
+        Some("https://www.pixiv.net/")
+    }
+
     fn novel(&self, fetch: &HttpClient, url: &Url) -> Result<Manifest, SourceError> {
         let target = Self::target(url).ok_or_else(|| SourceError::Parse {
             url: url.to_string(),

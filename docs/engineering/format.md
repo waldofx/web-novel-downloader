@@ -44,6 +44,13 @@ drift. Anything in `exports/` can be deleted and rebuilt.
       "hash": "sha256:…",
       "file": "chapters/0001.json"
     }
+  ],
+  "images": [
+    {
+      "url": "https://…/cover.jpg",
+      "file": "images/cover.jpg",
+      "hash": "sha256:…"
+    }
   ]
 }
 ```
@@ -51,10 +58,12 @@ drift. Anything in `exports/` can be deleted and rebuilt.
 `content_rating` is `general` or `adult`.
 
 **Optional fields are omitted, never null.** `arc`, `published_at`, `revised_at`,
-`author`, `synopsis`, `tags`, `cover` and `cover_url` are absent when the site does
-not expose them. `hash` is absent until the chapter has been downloaded at least
-once — an adapter cannot know a chapter's hash before fetching it, so the field is
-`Option<String>` in the model and skipped when `None`.
+`author`, `synopsis`, `tags`, `cover`, `cover_url` and `images` are absent when the
+site does not expose them, or — for `images` — when nothing has been fetched yet.
+`hash` is absent until the chapter has been downloaded at least once — an adapter
+cannot know a chapter's hash before fetching it, so the field is `Option<String>`
+in the model and skipped when `None`. `images` is the same kind of addition: an
+older directory reads fine, because a missing list is an empty one.
 
 ### A URL is not a path
 
@@ -73,10 +82,43 @@ is written. An image that could not be fetched keeps its URL rather than being
 dropped — a renderer falls back to the alt text, nothing about it is lost, and a
 later run can try again.
 
-Until that exists, an adapter's output is the half-way state on purpose:
-`cover_url` is set and `cover` is not, and a chapter written to disk still holds
-URLs. That is issue #18; it is why a novel downloaded today can have a cover URL
-in its manifest and an empty `images/`.
+### What is in `images/`
+
+Two rules decide a file's name, and both exist so that a name means something
+after the fact.
+
+**Named for where the picture sits, not for where it came from.** The cover is
+`images/cover.<ext>`; a body image is `images/<chapter>-<n>.<ext>`, with
+`<chapter>` zero-padded to four digits exactly as a chapter file is, and `<n>`
+counting the chapter's *distinct* images from one. `images/0007-2.png` is the
+second picture of chapter seven and can be read without opening anything — and a
+name survives the prose around it growing, which counting blocks or lines would
+not.
+
+**The extension is the media type the server stated.** It is what a reader
+afterwards uses to decide how to open the file — the EPUB's own manifest declares
+it — so the server's word comes first; the extension in the URL is the fallback
+for a host that sends no `Content-Type`; `bin` is the last resort, which nothing
+renders but which loses nothing. A response whose media type says `text/*` is a
+*page* — a filter, a captive portal, a soft `404` — and is not stored at all.
+
+`manifest.images` is the record of what was fetched: one entry per file, with the
+URL it came from and a hash of the bytes. The URL is the identity, which is what
+makes a second run cheap and what keeps the URL of a picture at all once the
+chapters have been rewritten to paths.
+
+**An image is present when it hashes to what was recorded.** The rule for a
+chapter, applied to a file: a copy that exists but does not match is fetched
+again rather than believed. A chapter that is skipped is never looked into, so
+`nvd update` walks the recorded images for this reason alone — otherwise a
+picture deleted from `images/` by hand would stay broken forever, with nothing
+ever asking for it again.
+
+**A picture that could not be fetched is reported, never fatal.** It does not
+fail its chapter and it does not fail the run: the URL stays where it was, and
+the count appears in the summary. For the same reason it does not make a run
+"not up to date" — a broken link would otherwise claim news forever, and an exit
+code that means nothing is worse than a warning that repeats.
 
 `published_at` is when the chapter appeared and `revised_at` is when the site says
 it was last revised — two facts, and conflating them would rewrite publication

@@ -101,8 +101,10 @@ per-host override is needed.
 
 ### Known gaps
 
-- **Illustrations inside a body are skipped** (issue #18 owns images: fetching
-  them, storing them, resolving URLs).
+- **Illustrations inside a body are dropped** (#42). An `<img>` inside an episode
+  never becomes a `Block::Image`, so nothing fetches it. The other half — a
+  `Block::Image` becoming a file in `images/` — works, and pixiv uses it; what is
+  missing is this adapter noticing the picture at all.
 - **Paywalled episodes** (Kakuyomu Pay) would surface as a parse error rather
   than a partial chapter. No work tested has one.
 
@@ -189,8 +191,10 @@ per-host delay applies.
 
 Images live on `i.pximg.net`, which answers **403 to a request without
 `Referer: https://www.pixiv.net/`** — and its own `robots.txt` disallows Google's
-crawlers, not us. Fetching them needs a per-source referer (#18), and a cover is
-not an exception.
+crawlers, not us. This is the one adapter that overrides
+`Source::image_referer`, and it is why a cover is fetched as successfully as an
+illustration inside a chapter. See
+[fetch.md](fetch.md#the-referer-when-a-host-asks-for-one).
 
 ### Known gaps
 
@@ -198,10 +202,6 @@ not an exception.
   reference that cannot be resolved — the illustration deleted, the reference
   malformed — is left in the text exactly as the author wrote it rather than
   costing the reader the chapter.
-- **Images are found, not fetched** (#18 owns that for every source). An
-  in-text image and a cover leave this adapter as URLs; the fetcher that stores
-  them in `images/` and rewrites the chapter is next. See
-  [format.md](format.md#a-url-is-not-a-path).
 - **A series with no published novels** is reported as a page that is not the
   site, because a manifest with no chapters would otherwise download nothing and
   call it success.
@@ -240,12 +240,16 @@ roadmap stays public-safe and personal reading lists are not published. Copy
 ### Checklist
 
 - [ ] Detect the site from a novel URL (`Source::matches`).
-- [ ] Parse novel metadata (title, author, tags, synopsis, cover, rating).
+- [ ] Parse novel metadata (title, author, tags, synopsis, cover, rating). A cover
+      is `cover_url` — a URL, not a path; only the fetcher can store one.
 - [ ] Enumerate the chapter list, in reading order, with stable URLs — plus the
       site's own arc/volume dividers, if it has any. Never infer a divider from a
       chapter's title.
 - [ ] Parse one chapter into the node model — **including ruby, emphasis, scene
-      breaks, notes, and images**.
+      breaks, notes, and images**. An image becomes a `Block::Image` holding an
+      **absolute** URL: `nvd download` fetches it into `images/` and rewrites the
+      block, and it cannot resolve a relative URL from where it sits.
+- [ ] Say whether the site's images need a `Referer` (`Source::image_referer`).
 - [ ] Handle pagination if the text is split across pages — including *lazy*
       pagination, where the HTML holds less than the page's own data.
 - [ ] Handle the site's text encoding correctly.
