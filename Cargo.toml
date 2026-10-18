@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/sources", "crates/download", "crates/export", "crates/cli"]
+members = [
+    "crates/core",
+    "crates/sources",
+    "crates/download",
+    "crates/export",
+    "crates/cli",
+    "apps/gui",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,3 +31,11 @@ scraper = "0.27"
 reqwest = { version = "0.13", features = ["blocking", "gzip"] }
 # Flate2 without zopfli: deflate at a sane speed, pure-Rust backend, no C toolchain.
 zip = { version = "7", default-features = false, features = ["deflate-flate2"] }
+# The desktop app. Tauri brings its own webview bindings; `withGlobalTauri`
+# means the front end is plain HTML and JavaScript, with no npm in the build.
+tauri = "2"
+tauri-build = "2"
+# A native "choose a folder" dialog, called from Rust. The Tauri dialog plugin
+# would be the same crate behind a permission, and this is the whole of what the
+# app needs from it.
+rfd = "0.15"

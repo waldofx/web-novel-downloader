@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>nvd — web novel downloader</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <h1>Web novel downloader</h1>
+      <p class="sub">
+        Saves a novel and its chapters into a folder you own, illustrations
+        included, and can write an EPUB, plain text or Markdown beside them.
+      </p>
+    </header>
+
+    <main>
+      <form class="panel" id="form" autocomplete="off">
+        <h2>The novel</h2>
+
+        <label for="url">Novel URL</label>
+        <input
+          id="url"
+          name="url"
+          type="text"
+          placeholder="https://ncode.syosetu.com/n1234ab/"
+          spellcheck="false"
+        />
+        <p class="hint" id="url-hint">
+          Any address into a work: a table of contents, a chapter, or a series.
+        </p>
+
+        <label for="dir">Save into</label>
+        <div class="row">
+          <input
+            id="dir"
+            name="dir"
+            type="text"
+            placeholder="choose a folder…"
+            spellcheck="false"
+          />
+          <button type="button" id="browse" class="quiet">Choose…</button>
+        </div>
+        <p class="hint">
+          The novel is written straight into this folder — the same folder
+          <code>nvd download --out</code> names. Choosing it again resumes and
+          fetches only what is missing.
+        </p>
+
+        <h2>Options</h2>
+
+        <div class="field">
+          <label for="session">Session</label>
+          <select id="session">
+            <option value="">none</option>
+          </select>
+        </div>
+        <p class="hint">
+          For a site that asks for a cookie. Make one with
+          <code>nvd session save</code>; it is never read by anything but the
+          hosts it names.
+        </p>
+
+        <div class="field">
+          <label for="max">At most how many chapters</label>
+          <input id="max" type="number" min="1" step="1" placeholder="all" />
+        </div>
+
+        <label class="check">
+          <input id="force" type="checkbox" />
+          Fetch every chapter again, ignoring what is already saved
+        </label>
+
+        <label class="check">
+          <input id="check" type="checkbox" />
+          On update, fetch each chapter to compare it <em>(slower, finds edits)</em>
+        </label>
+
+        <h2>Afterwards</h2>
+
+        <fieldset>
+          <legend>Write an export</legend>
+          <label class="check">
+            <input id="epub" type="checkbox" /> EPUB (readers, ruby kept)
+          </label>
+          <label class="check">
+            <input id="txt" type="checkbox" /> Plain text
+          </label>
+          <label class="check">
+            <input id="md" type="checkbox" /> Markdown
+          </label>
+        </fieldset>
+
+        <div class="field">
+          <label for="ruby">Furigana, where the format has none</label>
+          <select id="ruby">
+            <option value="parenthesised">base(reading)</option>
+            <option value="base_only">base only</option>
+          </select>
+        </div>
+
+        <label class="check">
+          <input id="notes" type="checkbox" checked />
+          Include the author's notes
+        </label>
+
+        <div class="buttons">
+          <button type="submit" id="download" class="primary">Download</button>
+          <button type="button" id="update">Update</button>
+          <button type="button" id="export">Export</button>
+          <button type="button" id="describe" class="quiet">Describe folder</button>
+        </div>
+      </form>
+
+      <section class="panel" id="output">
+        <h2 id="output-title">Nothing yet</h2>
+        <p class="counts" id="counts"></p>
+
+        <details id="details" hidden>
+          <summary>What the folder holds</summary>
+          <dl id="facts"></dl>
+        </details>
+
+        <ol id="chapters" aria-live="polite"></ol>
+
+        <div id="summary"></div>
+      </section>
+    </main>
+  </body>
+</html>
