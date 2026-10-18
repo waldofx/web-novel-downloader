@@ -63,9 +63,10 @@ Write the **failing test first**, watch it fail for the intended reason, then
 implement. Docs come last, once the tests pass — but in the *same* change.
 
 - Unit tests live in a `#[cfg(test)] mod tests` in the file under test.
-- Integration tests live in `crates/<crate>/tests/<feature>_<kind>.rs`; Cargo
-  compiles only top-level files there, so a subfolder is a module, never a test
-  target. Shared helpers go in `tests/common/mod.rs`.
+- Integration tests live in `crates/<crate>/tests/<feature>_<kind>.rs` — or
+  `apps/<app>/tests/` for an application, the same rule; Cargo compiles only
+  top-level files there, so a subfolder is a module, never a test target. Shared
+  helpers go in `tests/common/mod.rs`.
 - Captured HTML goes in `tests/fixtures/<site>/`, loaded with `include_str!`.
 - **Network tests are `#[ignore]`d.** `cargo test` must pass offline.
 
@@ -118,8 +119,9 @@ cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
 - `crates/download` — orchestration: resolve a URL, fetch what is missing, record hashes
 - `crates/export` — EPUB, TXT and Markdown, rendered from a downloaded directory
 - `crates/cli` — the `nvd` binary
+- `apps/gui` — the `nvd-app` window over the same library
 - `docs/guide` — user documentation
-- `docs/engineering` — architecture, format, fetch, sources, testing, gotchas
+- `docs/engineering` — architecture, format, fetch, sources, gui, testing, gotchas
 
 ## Ground rules
 

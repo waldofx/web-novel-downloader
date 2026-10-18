@@ -32,7 +32,12 @@ downstream consumes the file format, and never re-scrapes a site.
 ## Non-goals (for now)
 
 - Translation itself — a separate stage that shares the format.
-- A GUI — later: Tauri, reusing the same core.
+- A GUI toolkit's worth of features. The window is one page over the same
+  library, not a platform: no tabs, no library browser, no themes, no updater —
+  [gui.md](gui.md) says what it deliberately leaves out.
+- Cancelling a running job once it has started. `wnd-download` has no
+  cancellation point to hook, so neither front end offers one; whatever landed
+  before it stopped is resumable, which is what Ctrl-C has always relied on.
 - Bypassing paywalls, logins, or access controls. Cookies for accounts *you own*
   are supported, for legitimate access only.
 - Redistribution of downloaded content.
@@ -48,8 +53,12 @@ A Cargo workspace, split so that each concern can be replaced independently.
 | `wnd-download` | `crates/download` | orchestration: a novel URL in, a novel directory out |
 | `wnd-export` | `crates/export` | EPUB, TXT and Markdown, rendered from the chapters — see [export.md](export.md) |
 | `nvd` | `crates/cli` | the command-line front end |
+| `wnd-gui` | `apps/gui` | the Tauri window — `nvd-app`. A thin layer over the same library: requests in, an event stream out. See [gui.md](gui.md) |
 
-Planned later: `apps/gui` (Tauri) and `crates/translate`.
+Planned later: `crates/translate`. The window is in `apps/` rather than
+`crates/` because it is an *application*, not a library others depend on: the
+directory says nothing may depend on it, and `wnd-core`, `wnd-sources`,
+`wnd-download` and `wnd-export` have no idea it exists.
 
 **Why the orchestrator gets its own crate.** Resolving a URL to an adapter needs
 `wnd-sources`; `wnd-sources` produces types from `wnd-core`. Putting the
@@ -196,7 +205,8 @@ message shows the evidence instead of picking one. See
 | **M5b** | **Illustrations** — fetch and store the images a body references (#18) | done — an adapter leaves a picture as a URL and the downloader fetches it into `images/` as `cover.<ext>` or `<chapter>-<n>.<ext>`, records the URL and a hash in `manifest.images`, and rewrites the chapter to the path; a picture that cannot be fetched is reported and keeps its URL; pixiv's `i.pximg.net` is reached with the referer it demands |
 | **M6** | update tracking (fetch only new/changed chapters) | done — `nvd update` diffs the index against the recorded manifest; `--check` compares content where the site announces nothing |
 | **M7** | other sources (Royal Road, Scribble Hub, AO3, FFN, …) | — |
-| **M8** | CLI polish → Tauri GUI → translation stage | — |
+| **M7b** | **The desktop window** — Tauri over the same library (#21) | done — one page, one job at a time, progress on an event channel; the app decides nothing the command line does not already decide (#42 still stands for the HTML adapters) |
+| **M8** | CLI polish → translation stage | — |
 
 ## Open questions
 

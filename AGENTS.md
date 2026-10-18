@@ -36,6 +36,7 @@ Global OpenCode skills carry the portable version of these conventions:
 | `crates/download` | orchestration: a novel URL in, a novel directory out |
 | `crates/export` | EPUB, TXT and Markdown, rendered from the chapters |
 | `crates/cli` | the `nvd` binary |
+| `apps/gui` | the `nvd-app` window: a Tauri front end with no logic of its own below it ([gui.md](docs/engineering/gui.md)) |
 | `crates/*/tests` | per-feature integration tests; captured HTML in `tests/fixtures/<site>/` |
 | `docs/guide` | plain-language docs for users |
 | `docs/engineering` | the deep dive: architecture, format, fetch, sources, testing, **gotchas** |

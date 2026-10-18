@@ -44,6 +44,7 @@ destroying the furigana and the layout.
 ## Where to go next
 
 - [getting-started.md](getting-started.md) — build it, run it
+- [app.md](app.md) — the desktop window, for when a terminal is not wanted
 - [sessions.md](sessions.md) — the cookie jars for challenged sites
 - [faq.md](faq.md) — the questions that keep coming up
 - The [engineering docs](../engineering/) — for the code itself

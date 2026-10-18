@@ -2,10 +2,12 @@
 
 ## Status (October 2026)
 
-**Working end to end for Narou.** `nvd download` fetches a novel and its chapters
-into a structured directory, `nvd update` fetches only what is new or changed,
-`nvd export` turns one into an EPUB, a text file or Markdown, and `nvd info`
-describes a directory you already have. Other sites come next — see the
+**Working end to end for Narou, Kakuyomu, Hameln and Pixiv.** `nvd download`
+fetches a novel and its chapters into a structured directory, `nvd update`
+fetches only what is new or changed, `nvd export` turns one into an EPUB, a text
+file or Markdown, and `nvd info` describes a directory you already have. The
+same library drives a [desktop window](app.md), for when a terminal is not
+wanted. More sites come next — see the
 [roadmap](../engineering/architecture.md#roadmap).
 
 | Command | State |
@@ -15,6 +17,7 @@ describes a directory you already have. Other sites come next — see the
 | `nvd export <dir> --format epub` | works |
 | `nvd info <dir>` | works |
 | `nvd session save/list/delete` | works (user-provided cookies for challenged sites) |
+| `nvd-app` (the window) | works |
 
 ## Build it
 
