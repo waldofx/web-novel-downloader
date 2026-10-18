@@ -58,6 +58,8 @@ cargo test --workspace                                    # offline, always gree
 cargo test -p wnd-core   --test net_live   -- --ignored --nocapture
 cargo test -p wnd-sources --test narou_live    -- --ignored --nocapture
 cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
+cargo test -p wnd-sources --test hameln_live   -- --ignored --nocapture
+cargo test -p wnd-sources --test pixiv_live    -- --ignored --nocapture
 ```
 
 Live tests print what they found (`--nocapture`) so that a failure shows the real
@@ -87,10 +89,14 @@ paste the output. "Should work" is not evidence.
 | the exports: exact TXT and Markdown documents, EPUB structure, reproducibility | `crates/export/tests/export.rs` | a novel written to a temp directory; the EPUB is read back with `zip` |
 | the excerpt from a body that is not the site: tags, comments, `<script>`/`<style>`, entities, whitespace, and the cut on a character boundary | `core/src/net/blocked.rs` | fixture captures in `crates/core/tests/fixtures/blocked/`, plus the captured Komdigi notice's own words |
 | what the fetch layer does with an answer that is not the site: the `Cf-Mitigated` header, no page-text matching, the facts that travel with a body, a redirect, and the interception probe | `crates/core/tests/blocked.rs` | a real one-shot socket on `127.0.0.1`, so it stays offline; the exact user-facing sentence is asserted |
-| that an adapter reports a page which is not the site with the page's own words, and does not cry "filter" when nothing was proven | `crates/sources/tests/blocked.rs` | drives both adapters' `chapter` over a one-shot socket and serves a block page in a language this repository has never seen |
+| that an adapter reports a page which is not the site with the page's own words, and does not cry "filter" when nothing was proven | `crates/sources/tests/blocked.rs` | drives Narou's, Kakuyomu's and Pixiv's `chapter` over a one-shot socket and serves a block page in a language this repository has never seen |
 | Narou DOM helpers, notation, blank lines, TOC, dates | `sources/src/narou/*` | fixture files |
-| the shared DOM helpers, blank-line rule and inline walk | `sources/src/{dom,blocks,inline}.rs` | both adapters go through them, so they are covered by both adapters' tests as well as their own |
+| the shared DOM helpers, blank-line rule and inline walk | `sources/src/{dom,blocks,inline}.rs` | every HTML adapter goes through them, so they are covered by those adapters' tests as well as their own. Pixiv is the one adapter that reads no markup: it uses the blank-line rule and nothing else |
 | Kakuyomu's snapshot reader, arc grouping, blank-line counts, body scoping | `sources/src/kakuyomu/*` | fixture files, including a work whose HTML would lie about its size |
+| Pixiv's API envelope, its `null` fields, ids stated as strings or numbers, and the shape of a series listing | `sources/src/pixiv/api.rs` | fixture answers, including the failure envelope that arrives as HTTP 200 |
+| Pixiv's text notation: `[newpage]` joining, furigana, links, the author's `[chapter:]` headings, uploaded and referenced images, and the markers that stay literal | `sources/src/pixiv/content.rs` | a captured body, block for block |
+| Pixiv URL forms, work expansion, chapter numbering and the URLs a manifest holds | `sources/src/pixiv/mod.rs` | pure functions over the answers above; the work/listing paths themselves are covered by the live tests |
 | the whole pipeline under the real binary: exit codes, which stream output goes to, flags, `--help` | `crates/cli/tests/cli.rs` | runs `nvd` itself, so no library test can cover it. Offline, except one `#[ignore]`d test that downloads two chapters for real |
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |
 | Kakuyomu against the real site, including the 1069-episode work | `sources/tests/kakuyomu_live.rs` | `#[ignore]`d |
+| Pixiv against the real site: a series URL expanding to every chapter it states, and a standalone novel's reader pages arriving whole | `sources/tests/pixiv_live.rs` | `#[ignore]`d. Both tests re-read the API answer the manifest points at and compare *counts* — the two ways this adapter fails quietly are a series cut to one chapter and a chapter cut to one reader page |

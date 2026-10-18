@@ -11,6 +11,8 @@
 //!   platform from Narou.
 //! - [`kakuyomu`] — `kakuyomu.jp`, Kadokawa's site, read from the page's
 //!   Next.js snapshot where the HTML alone would be incomplete.
+//! - [`pixiv`] — `pixiv.net`, read from the site's JSON API rather than from its
+//!   pages, which are a JavaScript app over that API.
 //!
 //! The parts every site shares are not in the adapters: [`dom`] pulls text out
 //! of HTML, [`blocks`] applies the blank-line convention, [`inline`] decodes the
@@ -26,6 +28,7 @@
 pub mod hameln;
 pub mod kakuyomu;
 pub mod narou;
+pub mod pixiv;
 
 mod blocks;
 mod dom;
@@ -38,6 +41,7 @@ mod fixtures;
 use crate::hameln::Hameln;
 use crate::kakuyomu::Kakuyomu;
 use crate::narou::Narou;
+use crate::pixiv::Pixiv;
 use url::Url;
 use wnd_core::HttpClient;
 use wnd_core::{Chapter, ChapterMeta, ContentRating, Manifest, Page};
@@ -67,7 +71,12 @@ pub trait Source: Send + Sync {
 ///
 /// Order matters: the first adapter whose [`Source::matches`] returns true wins.
 pub fn registry() -> Vec<Box<dyn Source>> {
-    vec![Box::new(Narou), Box::new(Kakuyomu), Box::new(Hameln)]
+    vec![
+        Box::new(Narou),
+        Box::new(Kakuyomu),
+        Box::new(Hameln),
+        Box::new(Pixiv),
+    ]
 }
 
 /// Find the adapter responsible for a URL.
@@ -222,6 +231,8 @@ mod tests {
             ),
             ("https://syosetu.org/novel/316401/", "hameln"),
             ("https://h.syosetu.org/novel/288118/", "hameln"),
+            ("https://www.pixiv.net/novel/show.php?id=14929293", "pixiv"),
+            ("https://www.pixiv.net/novel/series/11074941", "pixiv"),
         ] {
             let url = Url::parse(raw).unwrap();
             let found = find(&sources, &url).expect("adapter should handle this URL");

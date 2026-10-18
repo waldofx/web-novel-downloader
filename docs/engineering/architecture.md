@@ -185,7 +185,8 @@ message shows the evidence instead of picking one. See
 | **M3** | **Kakuyomu** adapter | done — snapshot-based TOC (HTML alone lists one chapter of a thousand), real arcs, real `<ruby>` |
 | **M3b** | **Sessions** — a user-owned cookie store for challenged sites (#31) | done — `nvd session save/list/delete`, `--session` on `download` and `update`; Netscape `cookies.txt` import; per-host, never logged |
 | **M4** | **Hameln** (`syosetu.org`) + `h.syosetu.org` | done — adapter merged; `h.` markup sharing assumed, not verified |
-| **M5** | **Pixiv** (cookie-based auth) | depends on M3b |
+| **M5** | **Pixiv** (`pixiv.net/novel`), read from the site's JSON API (#20) | done — any URL into a work downloads the work (a series URL and a novel URL inside it both give the series); a novel's reader pages are joined rather than cut short; `[[rb:]]`, `[[jumpuri:]]`, `[chapter:]` and `[uploadedimage:]` are decoded; `[pixivimage:]` is best-effort |
+| **M5b** | **Illustrations** — fetch and store the images a body references (#18) | in progress — the model, the adapters and the exports carry them; the fetcher does not yet write them into `images/` |
 | **M6** | update tracking (fetch only new/changed chapters) | done — `nvd update` diffs the index against the recorded manifest; `--check` compares content where the site announces nothing |
 | **M7** | other sources (Royal Road, Scribble Hub, AO3, FFN, …) | — |
 | **M8** | CLI polish → Tauri GUI → translation stage | — |

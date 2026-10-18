@@ -41,3 +41,31 @@ pub(crate) const HAMELN_WORK: &str = include_str!("../tests/fixtures/hameln/work
 
 /// A Hameln chapter page: a title and a body in `#honbun`, with `<ruby>`.
 pub(crate) const HAMELN_CHAPTER: &str = include_str!("../tests/fixtures/hameln/chapter.html");
+
+/// One novel as Pixiv's `/ajax/novel/{id}` answers it: the work's metadata, its
+/// tags as objects, the series it belongs to (`seriesId` as a *number*), an
+/// uploaded image, and a body holding two reader pages, furigana, a scene break
+/// and an image reference that cannot be resolved.
+pub(crate) const PIXIV_NOVEL_IN_SERIES: &str =
+    include_str!("../tests/fixtures/pixiv/novel-in-series.json");
+
+/// A novel in no series: `seriesNavData` is null, and the body carries the
+/// author's own `[chapter:…]` dividers, a link, and two pages of one illust.
+pub(crate) const PIXIV_NOVEL_STANDALONE: &str =
+    include_str!("../tests/fixtures/pixiv/novel-standalone.json");
+
+/// A series as `/ajax/novel/series/{id}` answers it: plain tag names,
+/// `firstNovelId` as a number, and a cover in every size the site generates.
+pub(crate) const PIXIV_SERIES: &str = include_str!("../tests/fixtures/pixiv/series.json");
+
+/// One page of a series listing as `/ajax/novel/series_content/{id}` answers
+/// it: newest-first, three novels whose `seriesContentOrder` is *not* their
+/// reading order.
+pub(crate) const PIXIV_SERIES_CONTENT: &str =
+    include_str!("../tests/fixtures/pixiv/series-content.json");
+
+/// One illustration as `/ajax/illust/{id}` answers it, with two pages.
+pub(crate) const PIXIV_ILLUST: &str = include_str!("../tests/fixtures/pixiv/illust.json");
+
+/// Pixiv's failure envelope: HTTP 200, `error: true`, and the site's own words.
+pub(crate) const PIXIV_ERROR: &str = include_str!("../tests/fixtures/pixiv/error.json");

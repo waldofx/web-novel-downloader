@@ -1,0 +1,27 @@
+{
+  "error": false,
+  "message": "",
+  "body": {
+    "id": "20000001",
+    "title": "短編サンプル",
+    "userId": "1",
+    "userName": "別の作者",
+    "description": "",
+    "createDate": "2023-05-18T14:58:25+00:00",
+    "uploadDate": "2023-05-20T09:00:00+00:00",
+    "language": "ja",
+    "pageCount": 1,
+    "xRestrict": 1,
+    "isLoginOnly": false,
+    "coverUrl": "https://i.pximg.net/c/600x600/novel-cover-master/img/2023/05/18/23/58/25/ci20000001_cafebabe_master1200.jpg",
+    "content": "[chapter:第一章　始まり]\n\n\u3000本文。\n\n[[jumpuri:作者のサイト > https://example.com/novel]]へ。\n\n[pixivimage:12345678-2]\n\n[pixivimage:12345678]\n\n[chapter:第二章　終わり]\n\n\u3000最後の行。",
+    "tags": {
+      "authorId": "1",
+      "isLocked": false,
+      "tags": [{ "tag": "ファンタジー" }],
+      "writable": false
+    },
+    "seriesNavData": null,
+    "textEmbeddedImages": null
+  }
+}

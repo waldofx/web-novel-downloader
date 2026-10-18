@@ -1,0 +1,26 @@
+{
+  "error": false,
+  "message": "",
+  "body": {
+    "id": "11074941",
+    "userId": "406881",
+    "userName": "サンプル作者",
+    "xRestrict": 1,
+    "language": "ja",
+    "publishedContentCount": 3,
+    "firstNovelId": 14929293,
+    "latestNovelId": "15482204",
+    "title": "サンプルシリーズ",
+    "caption": "シリーズの説明一行目。<br />二行目。",
+    "tags": ["R-18", "学園", "SF"],
+    "cover": {
+      "urls": {
+        "240mw": "https://i.pximg.net/c/240x480_80/novel-cover-master/img/2021/03/26/15/00/36/sci11074941_deadbeef_master1200.jpg",
+        "480mw": "https://i.pximg.net/c/480x960/novel-cover-master/img/2021/03/26/15/00/36/sci11074941_deadbeef_master1200.jpg",
+        "1200x1200": "https://i.pximg.net/c/1200x1200/novel-cover-master/img/2021/03/26/15/00/36/sci11074941_deadbeef_master1200.jpg",
+        "128x128": "https://i.pximg.net/c/128x128/novel-cover-master/img/2021/03/26/15/00/36/sci11074941_deadbeef_square1200.jpg",
+        "original": "https://i.pximg.net/novel-cover-original/img/2021/03/26/15/00/36/sci11074941_deadbeef.png"
+      }
+    }
+  }
+}
