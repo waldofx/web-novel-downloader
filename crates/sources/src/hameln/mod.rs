@@ -33,6 +33,9 @@ selector!(SEL_TITLE, r#"span[itemprop="name"]"#);
 // chapter's own title just above the body. Which one is the chapter's is
 // `chapter`'s question to answer.
 selector!(SEL_TITLE_SPAN, r#"span[style*="font-size:120%"]"#);
+// The author's 後書き. The site's toggle link for it is a *different* element
+// (`#atogaki_open`), so a chapter page has no preface and one afterword.
+selector!(SEL_AFTERWORD, "#atogaki");
 selector!(SEL_AUTHOR, r#"span[itemprop="author"]"#);
 selector!(SEL_TAGS, r#"a[href*="mode=search"]"#);
 selector!(SEL_SS, "div.ss");
