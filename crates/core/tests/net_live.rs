@@ -16,8 +16,13 @@ use wnd_core::{Error, FetchPolicy, RobotsRules};
 #[test]
 #[ignore = "hits the network"]
 fn a_real_narou_page_is_fetched_and_decoded() {
+    let Some(target) = common::targets("narou").into_iter().next() else {
+        common::note_no_target("narou");
+        return;
+    };
+
     let page = common::client()
-        .get_page("https://ncode.syosetu.com/n5589cg/")
+        .get_page(target.as_str())
         .expect("narou page");
 
     assert!(
@@ -25,8 +30,12 @@ fn a_real_narou_page_is_fetched_and_decoded() {
         "expected Narou markup, got {} bytes",
         page.body.len()
     );
+    // The body must decode as UTF-8 rather than mojibake. A Japanese page has
+    // non-ASCII in it by definition, so a body with only ASCII did not decode.
+    // This replaces an assertion on one work's title: the check is that the
+    // bytes arrived as text, not what the text says.
     assert!(
-        page.body.contains("乙女ゲーム"),
+        !page.body.is_ascii(),
         "the body must decode as UTF-8, not mojibake"
     );
     assert_eq!(
@@ -47,7 +56,7 @@ fn narou_robots_txt_parses_and_permits_novel_pages() {
 
     println!("crawl delay: {:?}", rules.crawl_delay(user_agent));
     assert!(
-        rules.is_allowed(user_agent, "/n0608gd/1/"),
+        rules.is_allowed(user_agent, "/n0000aa/1/"),
         "Narou must permit novel pages for our crawler"
     );
 }

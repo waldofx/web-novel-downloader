@@ -10,3 +10,7 @@ wnd-core.workspace = true
 wnd-sources.workspace = true
 thiserror.workspace = true
 url.workspace = true
+
+[dev-dependencies]
+# The live tests read their targets from the gitignored `fixtures.local.json`.
+serde_json.workspace = true

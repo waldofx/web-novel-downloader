@@ -6,8 +6,47 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use url::Url;
 use wnd_core::store::storage::chapter_file_name;
-use wnd_core::{Block, Chapter, ChapterMeta, Inline, Manifest, NovelDir, SourceInfo};
+use wnd_core::{
+    Block, Chapter, ChapterMeta, FetchPolicy, HttpClient, Inline, Manifest, NovelDir, SourceInfo,
+};
+
+/// A client at the default fetch policy, for the live tests.
+pub fn client() -> HttpClient {
+    HttpClient::new(FetchPolicy::default()).expect("client")
+}
+
+/// The works this machine may hit: the gitignored `fixtures.local.json` at the
+/// repository root, one array per site, each entry `{ "url": …, "note": … }`.
+///
+/// A live test takes the entries it can use and skips when there are none, so a
+/// fresh clone runs `cargo test --workspace` without ever reaching a site. Until
+/// the file is copied from `fixtures.local.example.json`, every live test
+/// reports that it is skipping, which is the honest answer.
+pub fn targets(site: &str) -> Vec<Url> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures.local.json");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let file: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|error| {
+        panic!(
+            "{} is not JSON in the shape {} shows: {error}",
+            path.display(),
+            "fixtures.local.example.json"
+        )
+    });
+    file.get(site)
+        .and_then(serde_json::Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| entry.get("url").and_then(serde_json::Value::as_str))
+                .map(|url| Url::parse(url).unwrap_or_else(|error| panic!("{url}: {error}")))
+                .collect()
+        })
+        .unwrap_or_default()
+}
 
 /// A directory that deletes itself when dropped, so a failing assertion cannot
 /// leave debris in the system temporary directory.

@@ -1,21 +1,21 @@
 {
-  "_comment": "Local, gitignored test fixtures. Concrete example works (including adult titles) that adapters are developed and verified against.",
+  "_comment": "The example for the local, gitignored `fixtures.local.json`. Copy this file to `fixtures.local.json` in the workspace root and put a real work's URL under each site you want to test. Every URL here is an obvious placeholder, not a work: the live tests take the first entry under a site that fits the shape they need and skip, printing a note, when nothing is configured. The real file must never be committed — no work's address, title or prose belongs in the repository.",
   "narou": [
-    { "url": "https://ncode.syosetu.com/<novel-code>/", "note": "add a general-audience example" }
+    { "url": "https://ncode.syosetu.com/n0000aa/", "note": "a general-audience work; any number of chapters" }
   ],
   "novel18": [
-    { "url": "https://novel18.syosetu.com/n8309id/", "note": "personal priority — adult" }
+    { "url": "https://novel18.syosetu.com/n0000dd/", "note": "an adult work on the R18 sibling host" }
   ],
   "kakuyomu": [
-    { "url": "https://kakuyomu.jp/works/<work-id>", "note": "add an example" }
+    { "url": "https://kakuyomu.jp/works/10000000000000000001", "note": "a work; one with more than a hundred episodes also exercises the snapshot regression test" }
   ],
   "hameln": [
-    { "url": "https://syosetu.org/novel/<id>/", "note": "add an example" }
+    { "url": "https://syosetu.org/novel/000000/", "note": "a general-audience work" }
   ],
   "h_syosetu": [
-    { "url": "https://h.syosetu.org/novel/288118/", "note": "personal priority — adult" }
+    { "url": "https://h.syosetu.org/novel/000001/", "note": "an adult work on the R18 sibling host" }
   ],
   "pixiv": [
-    { "url": "https://www.pixiv.net/novel/show.php?id=19907692", "note": "personal priority" }
+    { "url": "https://www.pixiv.net/novel/show.php?id=10000001", "note": "a work; a series with pictures in its chapters also exercises the download test" }
   ]
 }
