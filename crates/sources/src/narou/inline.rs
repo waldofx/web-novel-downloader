@@ -21,7 +21,7 @@ use wnd_core::Inline;
 ///
 /// `page` is the chapter the content was found on, for the one thing the markup
 /// does not carry: a picture's `src`, which Narou writes protocol-relative
-/// (`//8873.mitemin.net/…`).
+/// (`//img.example.test/…`).
 pub(super) fn pieces_of(element: &ElementRef, page: &str) -> Vec<Piece> {
     let decode: TextDecoder = parse_notation;
     inline::pieces_of(element, decode, page)
@@ -281,7 +281,7 @@ mod tests {
         let element = document.select(&selector).next().expect("wrapper");
 
         assert_eq!(
-            pieces_of(&element, "https://ncode.syosetu.com/n4890bm/288/"),
+            pieces_of(&element, "https://ncode.syosetu.com/n0000bb/288/"),
             vec![
                 Piece::Inline(vec![text("前")]),
                 Piece::Image {

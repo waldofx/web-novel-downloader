@@ -109,8 +109,8 @@ mod tests {
     fn meta() -> ChapterMeta {
         ChapterMeta {
             index: 1,
-            title: "第1話　勇者、魔王の軍門に下る".to_string(),
-            url: "https://kakuyomu.jp/works/11054822663954717597/episodes/11054822663955326556"
+            title: "第1話　見本の一話".to_string(),
+            url: "https://kakuyomu.jp/works/10000000000000000001/episodes/10000000000000000003"
                 .to_string(),
             arc: None,
             published_at: None,
@@ -128,9 +128,10 @@ mod tests {
     fn one_br_is_one_blank_line_and_two_is_a_scene_break() {
         let chapter = chapter();
 
-        // The fixture is twelve real paragraphs then a real ruby paragraph. One
-        // blank between paragraphs disappears; the run of two before the
-        // dialogue becomes a scene break; the leading run of three drops.
+        // The fixture is ten placeholder paragraphs, one line of dialogue, a
+        // blank holding an ideographic space, then the ruby paragraph. One blank
+        // between paragraphs disappears; the run of two before the dialogue
+        // becomes a scene break; the leading run of three drops.
         assert_eq!(
             chapter.nodes.len(),
             8,
@@ -145,9 +146,7 @@ mod tests {
         assert_eq!(
             chapter.nodes[6],
             Block::Paragraph {
-                children: vec![text(
-                    "「今回は発生して三日のダンジョンだから攻略も難しくないと聞いていたのですが……まさか、全滅するとは……」"
-                )]
+                children: vec![text("「本文の見本です。」")]
             }
         );
     }
@@ -158,7 +157,7 @@ mod tests {
         assert_eq!(
             chapter.nodes[0],
             Block::Paragraph {
-                children: vec![text("　勇者とは。")]
+                children: vec![text("　本文の見本です。")]
             },
             "the leading U+3000 is the paragraph indent, not padding"
         );
@@ -186,12 +185,12 @@ mod tests {
             chapter.nodes.last().unwrap(),
             &Block::Paragraph {
                 children: vec![
-                    text("　このスマホ一台で"),
+                    text("　本文の見本です。"),
                     Inline::Ruby {
-                        base: "魔王".into(),
-                        reading: "俺".into()
+                        base: "漢字".into(),
+                        reading: "かんじ".into()
                     },
-                    text("の強化やダンジョンの拡張、魔物の召喚や罠の設置ができる。"),
+                    text("の見本です。"),
                 ]
             }
         );
@@ -202,7 +201,7 @@ mod tests {
         let chapter = chapter();
         let rendered = format!("{:?}", chapter.nodes);
 
-        for chrome in ["感想を書く", "ブラック待遇の勇者一行", "カクヨム"] {
+        for chrome in ["感想を書く", "見本の作品　～サンプル～", "カクヨム"] {
             assert!(
                 !rendered.contains(chrome),
                 "`{chrome}` is outside the body container, got: {rendered}"

@@ -99,7 +99,7 @@ site. It names what it was looking for — `a table of contents`, `an episode bo
 that into the user-facing message with `SourceError::with_evidence`:
 
 ```
-error: could not download http://syosetu.org/novel/288118/: the page that arrived is not a novel page (HTTP 200)
+error: could not download http://syosetu.org/novel/000001/: the page that arrived is not a novel page (HTTP 200)
   a table of contents was expected; 2741 bytes of text/html arrived instead
   it begins: "Trustpositif SITUS DIBLOKIR / WEBSITE BLOCKED MAAF, AKSES KE SITUS INI DIBLOKIR OLEH PEMERINTAH INDONESIA …"
   syosetu.org answered a URL that cannot exist with this same page, byte for byte: a DNS hijack, a captive portal, or a content filter is answering for it

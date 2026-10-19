@@ -338,7 +338,7 @@ pub fn load_session(name: &str) -> Result<Session, String> {
 
 /// A URL typed by a person, which may be missing its scheme.
 ///
-/// `ncode.syosetu.com/n1234ab/` is what someone copies out of an address bar's
+/// `ncode.syosetu.com/n0000aa/` is what someone copies out of an address bar's
 /// text, and refusing it because it has no `https://` would be the tool being
 /// pedantic about a thing it can work out.
 pub fn url_from_input(text: &str) -> Result<Url, String> {
@@ -701,7 +701,7 @@ mod tests {
     #[test]
     fn a_request_arrives_as_the_window_sends_it() {
         let sent = json!({
-            "url": "https://ncode.syosetu.com/n1234ab/",
+            "url": "https://ncode.syosetu.com/n0000aa/",
             "output": "C:\\novels",
             "maxChapters": 5,
             "force": true,
@@ -712,7 +712,7 @@ mod tests {
         });
 
         let request: DownloadRequest = serde_json::from_value(sent).expect("the window's own JSON");
-        assert_eq!(request.url, "https://ncode.syosetu.com/n1234ab/");
+        assert_eq!(request.url, "https://ncode.syosetu.com/n0000aa/");
         assert_eq!(request.output, "C:\\novels");
         assert_eq!(request.max_chapters, Some(5));
         assert!(request.force);

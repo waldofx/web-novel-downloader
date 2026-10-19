@@ -36,23 +36,23 @@ The binary lands at `target/release/nvd` (`nvd.exe` on Windows).
 
 ```bash
 # fetch a whole novel into ./my-novel
-nvd download https://ncode.syosetu.com/n0608gd/ --out ./my-novel
+nvd download https://ncode.syosetu.com/n0000aa/ --out ./my-novel
 
 # Kakuyomu works too — any of its URLs, including the chapter you are reading
-nvd download https://kakuyomu.jp/works/16816452221336015212 --out ./my-novel
+nvd download https://kakuyomu.jp/works/10000000000000000002 --out ./my-novel
 
 # Hameln too
-nvd download https://syosetu.org/novel/316401/ --out ./my-novel
+nvd download https://syosetu.org/novel/000000/ --out ./my-novel
 
 # Pixiv too. This is one chapter of a series, and on Pixiv the work is the
 # series — so this is what you get. Add --max-chapters 1 for just that chapter.
-nvd download https://www.pixiv.net/novel/show.php?id=29392114 --out ./my-novel
+nvd download https://www.pixiv.net/novel/show.php?id=10000001 --out ./my-novel
 
 # fetch it and produce a file for an e-reader in the same step
-nvd download https://ncode.syosetu.com/n0608gd/ --out ./my-novel --format epub,txt
+nvd download https://ncode.syosetu.com/n0000aa/ --out ./my-novel --format epub,txt
 
 # fetch an adult work (the site's own age gate still applies)
-nvd download https://novel18.syosetu.com/n8309id/ --out ./my-novel
+nvd download https://novel18.syosetu.com/n0000dd/ --out ./my-novel
 
 # see what a downloaded folder contains
 nvd info ./my-novel

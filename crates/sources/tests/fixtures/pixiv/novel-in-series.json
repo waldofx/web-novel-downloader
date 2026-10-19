@@ -2,7 +2,7 @@
   "error": false,
   "message": "",
   "body": {
-    "id": "14929293",
+    "id": "10000004",
     "title": "第一話　出会い",
     "userId": "406881",
     "userName": "サンプル作者",
@@ -13,7 +13,7 @@
     "pageCount": 2,
     "xRestrict": 0,
     "isLoginOnly": false,
-    "coverUrl": "https://i.pximg.net/c/600x600/novel-cover-master/img/2021/03/26/15/00/36/ci14929293_deadbeef_master1200.jpg",
+    "coverUrl": "https://i.pximg.net/c/600x600/novel-cover-master/img/2021/03/26/15/00/36/ci10000004_deadbeef_master1200.jpg",
     "content": "\u3000最初の段落。\n\u3000同じ段落の二行目。\n\n\u3000次の段落。\n\n[newpage]\n\n\u3000ページをまたいだ段落。\n\n\u3000[[rb:超能力 > エスパー]]を持つ少年。\n\n[uploadedimage:21674723]\n\n\u3000画像のあとの行。\n\n\n\u3000場面転換のあとの行。\n\n\u3000未解決の[uploadedimage:99999]はそのまま残る。\n\n\u3000文中の[uploadedimage:21674723]画像。",
     "tags": {
       "authorId": "406881",
@@ -38,7 +38,7 @@
     },
     "seriesNavData": {
       "seriesType": "novel",
-      "seriesId": 11074941,
+      "seriesId": 10000006,
       "title": "サンプルシリーズ",
       "isConcluded": false,
       "order": 1,
@@ -55,10 +55,10 @@
         "novelImageId": "21674723",
         "sl": "5",
         "urls": {
-          "240mw": "https://i.pximg.net/c/240x480_80/novel-cover-master/img/2021/03/26/15/00/36/tei851360652075_0171689cbc4c21e67a2d5fd573493161_master1200.jpg",
-          "480mw": "https://i.pximg.net/c/480x960/novel-cover-master/img/2021/03/26/15/00/36/tei851360652075_0171689cbc4c21e67a2d5fd573493161_master1200.jpg",
-          "1200x1200": "https://i.pximg.net/c/1200x1200/novel-cover-master/img/2021/03/26/15/00/36/tei851360652075_0171689cbc4c21e67a2d5fd573493161_master1200.jpg",
-          "original": "https://i.pximg.net/novel-cover-original/img/2021/03/26/15/00/36/tei851360652075_0171689cbc4c21e67a2d5fd573493161.png"
+          "240mw": "https://i.pximg.net/c/240x480_80/novel-cover-master/img/2021/03/26/15/00/36/tei10000006_deadbeef_master1200.jpg",
+          "480mw": "https://i.pximg.net/c/480x960/novel-cover-master/img/2021/03/26/15/00/36/tei10000006_deadbeef_master1200.jpg",
+          "1200x1200": "https://i.pximg.net/c/1200x1200/novel-cover-master/img/2021/03/26/15/00/36/tei10000006_deadbeef_master1200.jpg",
+          "original": "https://i.pximg.net/novel-cover-original/img/2021/03/26/15/00/36/tei10000006_deadbeef.png"
         }
       }
     }

@@ -233,17 +233,17 @@ mod tests {
     fn registry_routes_japanese_novel_sites() {
         let sources = registry();
         for (raw, id) in [
-            ("https://ncode.syosetu.com/n1234ab/", "narou"),
-            ("https://novel18.syosetu.com/n8309id/", "narou"),
-            ("https://kakuyomu.jp/works/16816452221336015212", "kakuyomu"),
+            ("https://ncode.syosetu.com/n0000aa/", "narou"),
+            ("https://novel18.syosetu.com/n0000dd/", "narou"),
+            ("https://kakuyomu.jp/works/10000000000000000002", "kakuyomu"),
             (
-                "https://kakuyomu.jp/works/16816452221336015212/episodes/16816452221336047787",
+                "https://kakuyomu.jp/works/10000000000000000002/episodes/10000000000000000004",
                 "kakuyomu",
             ),
-            ("https://syosetu.org/novel/316401/", "hameln"),
-            ("https://h.syosetu.org/novel/288118/", "hameln"),
-            ("https://www.pixiv.net/novel/show.php?id=14929293", "pixiv"),
-            ("https://www.pixiv.net/novel/series/11074941", "pixiv"),
+            ("https://syosetu.org/novel/000000/", "hameln"),
+            ("https://h.syosetu.org/novel/000001/", "hameln"),
+            ("https://www.pixiv.net/novel/show.php?id=10000004", "pixiv"),
+            ("https://www.pixiv.net/novel/series/10000006", "pixiv"),
         ] {
             let url = Url::parse(raw).unwrap();
             let found = find(&sources, &url).expect("adapter should handle this URL");

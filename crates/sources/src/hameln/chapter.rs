@@ -93,7 +93,7 @@ mod tests {
         ChapterMeta {
             index,
             title: title.to_string(),
-            url: format!("https://syosetu.org/novel/316401/{index}.html"),
+            url: format!("https://syosetu.org/novel/000000/{index}.html"),
             arc: None,
             published_at: None,
             revised_at: None,
@@ -108,6 +108,10 @@ mod tests {
         let chapter = parse_chapter(HAMELN_CHAPTER, &meta).unwrap();
 
         assert_eq!(chapter.index, 1);
+        // The header and the body each carry a `font-size:120%` span, and the
+        // header's comes first, so on a real page this is the work's title and
+        // not the chapter's (#51). The fixture keeps both spans in the order the
+        // site writes them; only emptiness is asserted until that is settled.
         assert!(!chapter.title.is_empty(), "title: {:?}", chapter.title);
         assert!(!chapter.nodes.is_empty(), "body must not be empty");
     }

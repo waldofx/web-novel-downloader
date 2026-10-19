@@ -375,7 +375,7 @@ mod tests {
         let meta = ChapterMeta {
             index: 1,
             title: "第一章".into(),
-            url: "https://ncode.syosetu.com/n1234ab/1/".into(),
+            url: "https://ncode.syosetu.com/n0000aa/1/".into(),
             arc: None,
             published_at: Some("2020-04-01T23:23:00+09:00".into()),
             revised_at: Some("2023-09-01T14:36:00+09:00".into()),
@@ -410,7 +410,7 @@ mod tests {
         let meta = ChapterMeta {
             index: 1,
             title: "第一章".into(),
-            url: "https://ncode.syosetu.com/n1234ab/1/".into(),
+            url: "https://ncode.syosetu.com/n0000aa/1/".into(),
             arc: None,
             published_at: None,
             revised_at: None,
@@ -452,7 +452,7 @@ mod tests {
         // stops parsing, the docs and the code have drifted apart.
         let json = r#"{
           "format_version": 1,
-          "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n1234ab/" },
+          "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n0000aa/" },
           "title": "…",
           "author": "…",
           "language": "ja",
@@ -499,7 +499,7 @@ mod tests {
         let manifest = Manifest::new(
             SourceInfo {
                 id: "narou".into(),
-                novel_url: "https://ncode.syosetu.com/n1234ab/".into(),
+                novel_url: "https://ncode.syosetu.com/n0000aa/".into(),
                 site_title: None,
             },
             "テスト小説",
@@ -514,7 +514,7 @@ mod tests {
         // A directory written before images were recorded is still readable:
         // the list is an addition, so the version does not move for it.
         let legacy = r#"{"format_version":1,
-          "source":{"id":"narou","novel_url":"https://ncode.syosetu.com/n1234ab/"},
+          "source":{"id":"narou","novel_url":"https://ncode.syosetu.com/n0000aa/"},
           "title":"t","language":"ja","content_rating":"general","chapters":[]}"#;
         assert!(
             serde_json::from_str::<Manifest>(legacy)

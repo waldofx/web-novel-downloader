@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use wnd_core::{BlockKind, Error, FetchPolicy, HttpClient};
 
-/// Cloudflare's challenge, captured from `https://syosetu.org/novel/288118/`
+/// Cloudflare's challenge, captured from `https://syosetu.org/novel/000001/`
 /// on 2026-10-17.
 const CLOUDFLARE_CHALLENGE: &str = include_str!("fixtures/blocked/cloudflare-challenge.html");
 

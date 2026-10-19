@@ -23,7 +23,7 @@
 (async () => {
   // Edit these two.
   const dir = "C:\\Users\\user\\AppData\\Local\\Temp\\opencode\\gui-e2e";
-  const url = "https://www.pixiv.net/novel/show.php?id=29392114";
+  const url = "https://www.pixiv.net/novel/show.php?id=10000001";
 
   const channel = "nvd://progress";
 

@@ -21,7 +21,7 @@ pub(crate) const NAROU_SHORT_STORY: &str = include_str!("../tests/fixtures/narou
 /// A chapter with an illustration in its body, trimmed from a real capture to
 /// the lines around it: the picture is a paragraph of its own, wrapped in an
 /// `<a>` that points at the same picture, and its `src` is **protocol-relative**
-/// (`//8873.mitemin.net/…`) — which is why an adapter has to resolve it against
+/// (`//img.example.test/…`) — which is why an adapter has to resolve it against
 /// the page rather than pass it on.
 pub(crate) const NAROU_CHAPTER_ILLUSTRATED: &str =
     include_str!("../tests/fixtures/narou/chapter-illustrated.html");
@@ -43,11 +43,19 @@ pub(crate) const KAKUYOMU_WORK_FLAT: &str =
 /// not be read as story text.
 pub(crate) const KAKUYOMU_CHAPTER: &str = include_str!("../tests/fixtures/kakuyomu/chapter.html");
 
-/// A Hameln work page: title, author, tags, a synopsis, arc headings, and
-/// chapter rows with published dates and a revision stamp.
+/// A Hameln work page: title, author, tags, a synopsis, six arcs, and chapter
+/// rows with published dates and a revision stamp.
+///
+/// Trimmed to the containers the parser reads, with twelve rows: the site puts
+/// its whole list on one page, and that is a fact about the site, not something
+/// a dozen rows could show either way. The words are placeholders (#41).
 pub(crate) const HAMELN_WORK: &str = include_str!("../tests/fixtures/hameln/work.html");
 
 /// A Hameln chapter page: a title and a body in `#honbun`, with `<ruby>`.
+///
+/// Both `font-size:120%` spans are kept in the order the site writes them, so
+/// the fixture answers the way a real page answers (#51); the prose is a
+/// placeholder (#41).
 pub(crate) const HAMELN_CHAPTER: &str = include_str!("../tests/fixtures/hameln/chapter.html");
 
 /// A Hameln **body** with illustrations in it, trimmed from a real chapter capture

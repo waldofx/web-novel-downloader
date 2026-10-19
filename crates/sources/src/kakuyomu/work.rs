@@ -2,15 +2,15 @@
 //!
 //! Both come from the page's snapshot, not from its HTML, and that is a
 //! deliberate choice forced by the site. A work page renders only the episodes
-//! of the first chapter server-side and lazy-loads the rest: the work used to
-//! write these tests shows **seven** episode links in its HTML and **1069**
+//! of the first chapter server-side and lazy-loads the rest: the capture these
+//! tests were built from showed **seven** episode links in its HTML and **1069**
 //! episodes in its snapshot. An HTML reader would download one chapter of a
 //! thousand-episode novel and say nothing. Of all the ways to be wrong, silently
 //! downloading a fraction is the worst.
 //!
 //! The episode list has two shapes, and both are ordinary:
 //!
-//! - grouped into arcs (章), each with a title, like `第１章　覚醒`;
+//! - grouped into arcs (章), each with a title, like `見本の章`;
 //! - one unnamed group, whose key is literally `TableOfContentsChapter:` — the
 //!   empty id is not a bug in the page, it is what an un-arc'd work looks like.
 //!
@@ -210,8 +210,8 @@ mod tests {
     use super::*;
     use crate::fixtures::{KAKUYOMU_WORK_ARCS, KAKUYOMU_WORK_FLAT};
 
-    const ARCS: &str = "16816452221336015212";
-    const FLAT: &str = "11054822663954717597";
+    const ARCS: &str = "10000000000000000002";
+    const FLAT: &str = "10000000000000000001";
 
     fn base(work_id: &str) -> Url {
         Url::parse(&format!("https://kakuyomu.jp/works/{work_id}")).expect("url")
@@ -226,27 +226,12 @@ mod tests {
     fn metadata_comes_from_the_snapshot() {
         let page = parsed(KAKUYOMU_WORK_ARCS, ARCS);
 
-        assert_eq!(
-            page.title,
-            "ギャルゲーのヘイトを溜めるクズでゲスな親友役として転生してしまいました。そして主人公が無能すぎて役にたたない……。"
-        );
-        assert_eq!(page.author.as_deref(), Some("桜祭"));
-        assert_eq!(
-            page.tags,
-            vec![
-                "恋愛",
-                "ラブコメ",
-                "ゲーム",
-                "主人公最強",
-                "学園",
-                "現代ファンタジー",
-                "ハーレム",
-                "死亡フラグ"
-            ]
-        );
+        assert_eq!(page.title, "見本の作品　～その二～");
+        assert_eq!(page.author.as_deref(), Some("見本の作者"));
+        assert_eq!(page.tags, vec!["恋愛", "ラブコメ"]);
         let synopsis = page.synopsis.expect("this work has an introduction");
         assert!(
-            synopsis.starts_with("前世の記憶を思い出してしまい"),
+            synopsis.starts_with("　あらすじの見本です。"),
             "the introduction is the synopsis, without leading blank lines: {synopsis:?}"
         );
         assert!(
@@ -267,12 +252,12 @@ mod tests {
         let indices: Vec<u32> = page.chapters.iter().map(|c| c.index).collect();
         assert_eq!(indices, vec![1, 2, 3, 4], "numbering does not restart");
 
-        assert_eq!(page.chapters[0].title, "１、『人に命令を下せる』能力の覚醒");
+        assert_eq!(page.chapters[0].title, "１、見本の一話");
         assert_eq!(
             page.chapters[0].url,
-            format!("https://kakuyomu.jp/works/{ARCS}/episodes/16816452221336047787")
+            format!("https://kakuyomu.jp/works/{ARCS}/episodes/10000000000000000004")
         );
-        assert_eq!(page.chapters[0].arc.as_deref(), Some("第１章　覚醒"));
+        assert_eq!(page.chapters[0].arc.as_deref(), Some("見本の章"));
         assert_eq!(
             page.chapters[0].published_at.as_deref(),
             Some("2021-07-03T06:46:00.000Z")
@@ -286,7 +271,7 @@ mod tests {
         assert_eq!(page.chapters[2].index, 3);
         assert_eq!(
             page.chapters[2].arc.as_deref(),
-            Some("第２章　禁断の恋愛"),
+            Some("見本の二章"),
             "the arc changes with the chapter it belongs to"
         );
     }
@@ -297,7 +282,7 @@ mod tests {
 
         assert_eq!(
             page.catchphrase.as_deref(),
-            Some("クズでゲスな悪役親友役として、転生してしまいました…。1200万PV！")
+            Some("これはキャッチコピーの見本です。")
         );
         assert_eq!(page.cover_url, None, "this work has no admin cover");
         assert_eq!(page.warnings, vec!["sexual", "violent", "cruel"]);
@@ -307,13 +292,13 @@ mod tests {
         let page = parsed(KAKUYOMU_WORK_FLAT, FLAT);
 
         assert_eq!(page.chapters.len(), 2);
-        assert_eq!(page.chapters[0].title, "第1話　勇者、魔王の軍門に下る");
+        assert_eq!(page.chapters[0].title, "第1話　見本の一話");
         assert_eq!(
             page.chapters[0].arc, None,
             "the single group has no name, and an empty id is not a name"
         );
-        assert_eq!(page.author.as_deref(), Some("ナガワ　ヒイロ"));
-        assert_eq!(page.tags[0], "主人公最強");
+        assert_eq!(page.author.as_deref(), Some("見本の作者"));
+        assert_eq!(page.tags[0], "ファンタジー");
     }
 
     #[test]

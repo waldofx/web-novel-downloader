@@ -144,9 +144,9 @@ mod tests {
 
     #[test]
     fn work_and_episode_urls_are_matched() {
-        assert!(matches("https://kakuyomu.jp/works/16816452221336015212"));
+        assert!(matches("https://kakuyomu.jp/works/10000000000000000002"));
         assert!(matches(
-            "https://kakuyomu.jp/works/16816452221336015212/episodes/16816452221336047787"
+            "https://kakuyomu.jp/works/10000000000000000002/episodes/10000000000000000004"
         ));
         assert!(matches("https://KAKUYOMU.jp/works/1"));
     }
@@ -163,20 +163,20 @@ mod tests {
     fn any_url_on_a_work_reduces_to_its_work_page() {
         for (input, want) in [
             (
-                "https://kakuyomu.jp/works/11054822663954717597",
-                "https://kakuyomu.jp/works/11054822663954717597",
+                "https://kakuyomu.jp/works/10000000000000000001",
+                "https://kakuyomu.jp/works/10000000000000000001",
             ),
             (
-                "https://kakuyomu.jp/works/11054822663954717597/",
-                "https://kakuyomu.jp/works/11054822663954717597",
+                "https://kakuyomu.jp/works/10000000000000000001/",
+                "https://kakuyomu.jp/works/10000000000000000001",
             ),
             (
-                "https://kakuyomu.jp/works/11054822663954717597/episodes/11054822663955326556",
-                "https://kakuyomu.jp/works/11054822663954717597",
+                "https://kakuyomu.jp/works/10000000000000000001/episodes/10000000000000000003",
+                "https://kakuyomu.jp/works/10000000000000000001",
             ),
             (
-                "https://kakuyomu.jp/works/11054822663954717597?utm_source=x#p12",
-                "https://kakuyomu.jp/works/11054822663954717597",
+                "https://kakuyomu.jp/works/10000000000000000001?utm_source=x#p12",
+                "https://kakuyomu.jp/works/10000000000000000001",
             ),
         ] {
             assert_eq!(
@@ -194,7 +194,7 @@ mod tests {
             "https://kakuyomu.jp/rankings/all/weekly",
             "https://kakuyomu.jp/works/",
             "https://kakuyomu.jp/works/not-a-number",
-            "https://kakuyomu.jp/users/igana0510",
+            "https://kakuyomu.jp/users/sample_writer",
         ] {
             assert!(
                 Kakuyomu::canonical_work_url(&url(input)).is_none(),

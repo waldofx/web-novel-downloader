@@ -101,7 +101,7 @@ Nothing was downloaded, and the message shows what answered instead — its HTTP
 status, its size, and the beginning of its own text:
 
 ```
-error: could not download http://syosetu.org/novel/288118/: the page that arrived is not a novel page (HTTP 200)
+error: could not download http://syosetu.org/novel/000001/: the page that arrived is not a novel page (HTTP 200)
   a table of contents was expected; 2741 bytes of text/html arrived instead
   it begins: "SITUS DIBLOKIR / WEBSITE BLOCKED MAAF, AKSES KE SITUS INI DIBLOKIR OLEH PEMERINTAH …"
   syosetu.org answered a URL that cannot exist with this same page, byte for byte: a DNS hijack, a captive portal, or a content filter is answering for it

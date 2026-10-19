@@ -134,32 +134,32 @@ mod tests {
 
     #[test]
     fn both_hosts_are_matched() {
-        assert!(matches("https://syosetu.org/novel/316401/"));
-        assert!(matches("https://syosetu.org/novel/316401/1.html"));
-        assert!(matches("https://h.syosetu.org/novel/288118/"));
+        assert!(matches("https://syosetu.org/novel/000000/"));
+        assert!(matches("https://syosetu.org/novel/000000/1.html"));
+        assert!(matches("https://h.syosetu.org/novel/000001/"));
     }
 
     #[test]
     fn host_matching_is_exact_and_case_insensitive() {
-        assert!(matches("https://SYOSETU.ORG/novel/316401/"));
-        assert!(!matches("https://syosetu.org.evil.example/novel/316401/"));
-        assert!(!matches("https://ncode.syosetu.com/n0608gd/"));
+        assert!(matches("https://SYOSETU.ORG/novel/000000/"));
+        assert!(!matches("https://syosetu.org.evil.example/novel/000000/"));
+        assert!(!matches("https://ncode.syosetu.com/n0000aa/"));
         assert!(!matches("https://kakuyomu.jp/works/1234"));
     }
 
     #[test]
     fn other_schemes_are_not_matched() {
-        assert!(!matches("ftp://syosetu.org/novel/316401/"));
+        assert!(!matches("ftp://syosetu.org/novel/000000/"));
     }
 
     #[test]
     fn adult_host_selects_the_adult_rating() {
         assert_eq!(
-            rating_for(&Url::parse("https://h.syosetu.org/novel/288118/").unwrap()),
+            rating_for(&Url::parse("https://h.syosetu.org/novel/000001/").unwrap()),
             ContentRating::Adult
         );
         assert_eq!(
-            rating_for(&Url::parse("https://syosetu.org/novel/316401/").unwrap()),
+            rating_for(&Url::parse("https://syosetu.org/novel/000000/").unwrap()),
             ContentRating::General
         );
     }
@@ -168,17 +168,17 @@ mod tests {
     fn canonical_url_reduces_a_chapter_to_its_work() {
         assert_eq!(
             Hameln::canonical_novel_url(
-                &Url::parse("https://syosetu.org/novel/316401/1.html").unwrap()
+                &Url::parse("https://syosetu.org/novel/000000/1.html").unwrap()
             )
             .unwrap()
             .as_str(),
-            "https://syosetu.org/novel/316401/"
+            "https://syosetu.org/novel/000000/"
         );
         assert_eq!(
-            Hameln::canonical_novel_url(&Url::parse("https://syosetu.org/novel/316401/").unwrap())
+            Hameln::canonical_novel_url(&Url::parse("https://syosetu.org/novel/000000/").unwrap())
                 .unwrap()
                 .as_str(),
-            "https://syosetu.org/novel/316401/"
+            "https://syosetu.org/novel/000000/"
         );
     }
 }
