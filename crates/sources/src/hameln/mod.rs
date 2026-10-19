@@ -29,6 +29,10 @@ pub const HOSTS: [&str; 2] = ["syosetu.org", "h.syosetu.org"];
 pub const ADULT_HOST: &str = "h.syosetu.org";
 
 selector!(SEL_TITLE, r#"span[itemprop="name"]"#);
+// The site's big-text span: the work's title in the page header, and the
+// chapter's own title just above the body. Which one is the chapter's is
+// `chapter`'s question to answer.
+selector!(SEL_TITLE_SPAN, r#"span[style*="font-size:120%"]"#);
 selector!(SEL_AUTHOR, r#"span[itemprop="author"]"#);
 selector!(SEL_TAGS, r#"a[href*="mode=search"]"#);
 selector!(SEL_SS, "div.ss");
