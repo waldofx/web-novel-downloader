@@ -268,7 +268,10 @@ fn downloads_a_real_novel_end_to_end() {
         }
     }
     let Some((url, known)) = chosen else {
-        println!("note: no multi-chapter narou work in fixtures.local.json — skipping");
+        println!(
+            "note: no `narou` target with more than one chapter — skipping \
+             (see fixtures.local.example.json)"
+        );
         return;
     };
     let url = url.as_str();
@@ -350,7 +353,7 @@ fn downloads_a_real_novel_end_to_end() {
 #[ignore = "needs the network and a live site"]
 fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
     let Some(work) = common::targets("kakuyomu").into_iter().next() else {
-        println!("note: no kakuyomu entry in fixtures.local.json — skipping");
+        common::note_no_target("kakuyomu");
         return;
     };
 
@@ -431,7 +434,10 @@ fn updates_a_real_novel_and_then_has_nothing_to_do() {
         .into_iter()
         .find(|url| manifest_of(url).chapters.len() == 1);
     let Some(url) = short else {
-        println!("note: no single-chapter narou work in fixtures.local.json — skipping");
+        println!(
+            "note: no `narou` target with exactly one chapter — skipping \
+             (see fixtures.local.example.json)"
+        );
         return;
     };
 
