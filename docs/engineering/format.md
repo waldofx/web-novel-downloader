@@ -23,7 +23,7 @@ drift. Anything in `exports/` can be deleted and rebuilt.
 ```json
 {
   "format_version": 1,
-  "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n1234ab/" },
+  "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n0000aa/" },
   "title": "…",
   "author": "…",
   "language": "ja",

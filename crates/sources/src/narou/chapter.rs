@@ -7,7 +7,7 @@
 //!
 //! An author's illustration gets a `<p>` of its own, holding an `<a>` around an
 //! `<img>` whose address the site writes protocol-relative
-//! (`//8873.mitemin.net/…`). The walk resolves it against the chapter, so the
+//! (`//img.example.test/…`). The walk resolves it against the chapter, so the
 //! picture reaches `images/` and an export rather than vanishing.
 
 use super::inline::pieces_of;
@@ -84,7 +84,7 @@ mod tests {
         ChapterMeta {
             index,
             title: format!("第{index}話"),
-            url: format!("https://ncode.syosetu.com/n0608gd/{index}/"),
+            url: format!("https://ncode.syosetu.com/n0000aa/{index}/"),
             arc: None,
             published_at: None,
             revised_at: None,
@@ -216,7 +216,7 @@ mod tests {
         ChapterMeta {
             index: 288,
             title: "第288話".to_string(),
-            url: "https://ncode.syosetu.com/n4890bm/288/".to_string(),
+            url: "https://ncode.syosetu.com/n0000bb/288/".to_string(),
             arc: None,
             published_at: None,
             revised_at: None,
@@ -233,27 +233,20 @@ mod tests {
             chapter.nodes,
             vec![
                 Block::Paragraph {
-                    children: vec![text(
-                        "　一方ウィンは学校に通わせてはもらえなかったが、帳簿付けの仕事を覚えるために、ハンナから文字と数字の計算だけは教わっていた。"
-                    )]
+                    children: vec![text("　挿絵の前の本文の見本です。")]
                 },
                 Block::Paragraph {
-                    children: vec![text(
-                        "　だから、ウィンが本を読んでくれるのに合わせてレティも声を揃えて読む。"
-                    )]
+                    children: vec![text("　挿絵の直前の行の見本です。")]
                 },
                 Block::Image {
                     // Protocol-relative on the page, absolute once it is a block:
                     // the fetcher has no page to complete it against.
-                    src: "https://8873.mitemin.net/userpageimage/viewimagebig/icode/i78408/"
-                        .to_string(),
-                    alt: Some("挿絵(By みてみん)".to_string()),
+                    src: "https://img.example.test/view/00000/".to_string(),
+                    alt: Some("挿絵(By サンプル)".to_string()),
                 },
                 Block::SceneBreak,
                 Block::Paragraph {
-                    children: vec![text(
-                        "　家庭教師が教えてくれる、ちんぷんかんぷんな内容が、ウィンと一緒だと素直に頭の中に入ってきた。"
-                    )]
+                    children: vec![text("　挿絵のあとの本文の見本です。")]
                 },
             ],
             "the picture is a block beside the prose, not a line of characters in it"
@@ -271,7 +264,7 @@ mod tests {
         let meta = ChapterMeta {
             index: 1,
             title: "短編のタイトル".to_string(),
-            url: "https://ncode.syosetu.com/n5589cg/".to_string(),
+            url: "https://ncode.syosetu.com/n0000cc/".to_string(),
             arc: None,
             published_at: None,
             revised_at: None,
@@ -308,7 +301,7 @@ mod tests {
 
         match error {
             SourceError::NotTheSite { url, expected } => {
-                assert_eq!(url, "https://ncode.syosetu.com/n0608gd/1/");
+                assert_eq!(url, "https://ncode.syosetu.com/n0000aa/1/");
                 assert_eq!(expected, "a chapter body");
             }
             other => panic!("expected a page that is not the site, got {other:?}"),

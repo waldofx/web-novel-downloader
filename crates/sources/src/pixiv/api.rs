@@ -352,7 +352,7 @@ mod tests {
         let novel: Novel =
             body_of(fixtures::PIXIV_NOVEL_IN_SERIES).expect("the captured novel answer");
 
-        assert_eq!(novel.id, "14929293");
+        assert_eq!(novel.id, "10000004");
         assert_eq!(novel.title, "第一話　出会い");
         assert_eq!(novel.user_name, "サンプル作者");
         assert_eq!(novel.tag_names(), vec!["SF", "学園"]);
@@ -367,7 +367,7 @@ mod tests {
 
         assert_eq!(
             novel.series_id(),
-            Some("11074941"),
+            Some("10000006"),
             "seriesId is a number in the answer and must read as an id"
         );
         let nav = novel.series_nav_data.as_ref().expect("series navigation");
@@ -383,7 +383,7 @@ mod tests {
             best(&embedded.urls),
             Some(
                 "https://i.pximg.net/novel-cover-original/img/2021/03/26/15/00/36/\
-                 tei851360652075_0171689cbc4c21e67a2d5fd573493161.png"
+                 tei10000006_deadbeef.png"
             ),
             "the original is the file worth downloading"
         );
@@ -404,7 +404,7 @@ mod tests {
     fn the_series_answer_reads_with_plain_tags_and_a_numbered_first_novel() {
         let series: Series = body_of(fixtures::PIXIV_SERIES).expect("the captured series answer");
 
-        assert_eq!(series.id, "11074941");
+        assert_eq!(series.id, "10000006");
         assert_eq!(series.title, "サンプルシリーズ");
         assert_eq!(series.tags, vec!["R-18", "学園", "SF"]);
         assert_eq!(series.user_name, "サンプル作者");
@@ -412,7 +412,7 @@ mod tests {
 
         let cover = series.cover.expect("a cover");
         assert!(
-            best(&cover.urls).is_some_and(|url| url.ends_with("sci11074941_deadbeef.png")),
+            best(&cover.urls).is_some_and(|url| url.ends_with("sci10000006_deadbeef.png")),
             "got: {:?}",
             best(&cover.urls)
         );

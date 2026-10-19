@@ -38,7 +38,7 @@ fn download_request(output: &str) -> DownloadRequest {
 /// the real registry rather than a fake adapter.
 fn narou_request(output: &str) -> DownloadRequest {
     DownloadRequest {
-        url: "https://ncode.syosetu.com/n1234ab/".to_string(),
+        url: "https://ncode.syosetu.com/n0000aa/".to_string(),
         ..download_request(output)
     }
 }
@@ -61,17 +61,17 @@ fn run_download(source: FakeSource, dir: &TempDir) -> (job::Report, Vec<Event>) 
 #[test]
 fn a_url_without_a_scheme_is_still_a_url() {
     assert_eq!(
-        job::url_from_input("https://ncode.syosetu.com/n1234ab/")
+        job::url_from_input("https://ncode.syosetu.com/n0000aa/")
             .unwrap()
             .as_str(),
-        "https://ncode.syosetu.com/n1234ab/"
+        "https://ncode.syosetu.com/n0000aa/"
     );
     // What someone copies out of an address bar's text, or types from memory.
     assert_eq!(
-        job::url_from_input("  ncode.syosetu.com/n1234ab/  ")
+        job::url_from_input("  ncode.syosetu.com/n0000aa/  ")
             .unwrap()
             .as_str(),
-        "https://ncode.syosetu.com/n1234ab/"
+        "https://ncode.syosetu.com/n0000aa/"
     );
 
     assert!(

@@ -631,9 +631,9 @@ mod tests {
 
     #[test]
     fn origin_drops_path_and_query_but_keeps_the_port() {
-        let url = Url::parse("https://ncode.syosetu.com/n0608gd/1/?p=2").unwrap();
+        let url = Url::parse("https://ncode.syosetu.com/n0000aa/1/?p=2").unwrap();
         assert_eq!(origin_of(&url), "https://ncode.syosetu.com");
-        assert_eq!(path_and_query(&url), "/n0608gd/1/?p=2");
+        assert_eq!(path_and_query(&url), "/n0000aa/1/?p=2");
 
         let url = Url::parse("http://example.com:8080/x").unwrap();
         assert_eq!(origin_of(&url), "http://example.com:8080");

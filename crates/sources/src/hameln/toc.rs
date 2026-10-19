@@ -153,7 +153,7 @@ fn strip_author_prefix(text: &str) -> String {
 }
 
 fn chapter_index_from_href(href: &str) -> Option<u32> {
-    // `.../316401/1.html` or `.../316401/1/`
+    // `.../000000/1.html` or `.../000000/1/`
     let last = href.trim_end_matches('/').rsplit('/').next()?;
     let stem = last.strip_suffix(".html").unwrap_or(last);
     stem.parse().ok()
@@ -220,21 +220,21 @@ mod tests {
     use url::Url;
 
     fn base() -> Url {
-        Url::parse("https://syosetu.org/novel/316401/").unwrap()
+        Url::parse("https://syosetu.org/novel/000000/").unwrap()
     }
 
     #[test]
     fn the_work_page_yields_its_title_and_author() {
         let toc = parse_toc(HAMELN_WORK, &base());
-        assert_eq!(toc.title.as_deref(), Some("〝アリウス〟潰すゾ!!!"));
-        assert_eq!(toc.author.as_deref(), Some("あば茶"));
+        assert_eq!(toc.title.as_deref(), Some("見本の作品　～サンプル～"));
+        assert_eq!(toc.author.as_deref(), Some("見本作者"));
     }
 
     #[test]
     fn the_work_page_yields_real_tags_only() {
         let toc = parse_toc(HAMELN_WORK, &base());
-        assert!(toc.tags.contains(&"ヤンデレ".to_string()));
-        assert!(toc.tags.contains(&"転生".to_string()));
+        assert!(toc.tags.contains(&"見本タグ".to_string()));
+        assert!(toc.tags.contains(&"サンプル".to_string()));
         assert!(
             !toc.tags
                 .iter()
@@ -248,23 +248,29 @@ mod tests {
     fn the_work_page_yields_a_synopsis() {
         let toc = parse_toc(HAMELN_WORK, &base());
         assert!(
-            toc.synopsis.as_deref().unwrap_or("").contains("オリ主くん"),
+            toc.synopsis
+                .as_deref()
+                .unwrap_or("")
+                .contains("見本のあらすじ"),
             "got: {:?}",
             toc.synopsis
         );
     }
 
+    // The fixture carries twelve rows — the shape of the site's one-page list,
+    // not its length: Hameln puts every episode on the table of contents, and a
+    // fixture would have to hold all of them to prove otherwise (#41).
     #[test]
     fn the_work_page_lists_every_episode() {
         let toc = parse_toc(HAMELN_WORK, &base());
-        assert_eq!(toc.entries.len(), 535);
+        assert_eq!(toc.entries.len(), 12);
     }
 
     #[test]
     fn episodes_are_numbered_from_one_without_gaps() {
         let toc = parse_toc(HAMELN_WORK, &base());
         let indices: Vec<u32> = toc.entries.iter().map(|e| e.index).collect();
-        assert_eq!(indices, (1..=535).collect::<Vec<_>>());
+        assert_eq!(indices, (1..=12).collect::<Vec<_>>());
     }
 
     #[test]

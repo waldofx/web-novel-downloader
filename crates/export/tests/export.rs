@@ -19,7 +19,7 @@ use wnd_core::{
 use wnd_export::{ExportError, ExportOptions, Format, RubyStyle, export};
 
 const NOVEL_URL: &str = "https://fake.test/novel/";
-const TITLE: &str = "二重勇者はすごいです！";
+const TITLE: &str = "見本の勇者";
 
 fn meta(index: u32, title: &str, arc: Option<&str>) -> ChapterMeta {
     ChapterMeta {
@@ -46,13 +46,13 @@ fn fixture_manifest() -> Manifest {
         TITLE,
         "ja",
     );
-    manifest.author = Some("ウスバー（正直者）".to_string());
-    manifest.synopsis = Some("――ただ、強い！！\n\n二年前に勇者として召喚された。".to_string());
+    manifest.author = Some("見本作者".to_string());
+    manifest.synopsis = Some("――これはあらすじの見本です。\n\n本文ではありません。".to_string());
     manifest.cover = Some("images/cover.png".to_string());
     manifest.content_rating = ContentRating::General;
     manifest.chapters = vec![
-        meta(1, "第1話　勇者の帰還", Some("第一章　勇者、日本に帰る")),
-        meta(2, "第2話　日本", Some("第一章　勇者、日本に帰る")),
+        meta(1, "第1話　見本の一話", Some("第一章　見本の章")),
+        meta(2, "第2話　見本の二話", Some("第一章　見本の章")),
     ];
     manifest
 }
@@ -64,7 +64,7 @@ fn text(value: &str) -> Inline {
 }
 
 fn fixture_chapter_one() -> Chapter {
-    let mut chapter = Chapter::new(1, "第1話　勇者の帰還");
+    let mut chapter = Chapter::new(1, "第1話　見本の一話");
     chapter.pre_note.push(Block::Paragraph {
         children: vec![text("いよいよ新連載始めます！")],
     });
@@ -93,7 +93,7 @@ fn fixture_chapter_one() -> Chapter {
 }
 
 fn fixture_chapter_two() -> Chapter {
-    let mut chapter = Chapter::new(2, "第2話　日本");
+    let mut chapter = Chapter::new(2, "第2話　見本の二話");
     chapter.nodes.push(Block::Paragraph {
         children: vec![text("　二話目。")],
     });
@@ -165,25 +165,22 @@ fn the_txt_export_is_plain_text_in_reading_order() {
     assert_eq!(summary.chapters, 2);
     assert_eq!(
         summary.path.file_name().unwrap().to_str().unwrap(),
-        "二重勇者はすごいです！.txt"
+        "見本の勇者.txt"
     );
-    assert_eq!(
-        summary.path,
-        novel.exports_dir().join("二重勇者はすごいです！.txt")
-    );
+    assert_eq!(summary.path, novel.exports_dir().join("見本の勇者.txt"));
 
     let expected = [
-        "二重勇者はすごいです！",
-        "ウスバー（正直者）",
+        "見本の勇者",
+        "見本作者",
         "",
-        "――ただ、強い！！",
+        "――これはあらすじの見本です。",
         "",
-        "二年前に勇者として召喚された。",
+        "本文ではありません。",
         "",
         "",
-        "【第一章　勇者、日本に帰る】",
+        "【第一章　見本の章】",
         "",
-        "第1話　勇者の帰還",
+        "第1話　見本の一話",
         "",
         "［前書き］",
         "いよいよ新連載始めます！",
@@ -198,7 +195,7 @@ fn the_txt_export_is_plain_text_in_reading_order() {
         "次回もよろしく。",
         "",
         "",
-        "第2話　日本",
+        "第2話　見本の二話",
         "",
         "　二話目。",
         "[画像: 挿絵]",
@@ -273,22 +270,22 @@ fn the_markdown_export_uses_markup_and_relative_image_paths() {
     assert_eq!(Format::Markdown.extension(), "md");
     assert_eq!(
         summary.path.file_name().unwrap().to_str().unwrap(),
-        "二重勇者はすごいです！.md"
+        "見本の勇者.md"
     );
 
     let expected = [
-        "# 二重勇者はすごいです！",
+        "# 見本の勇者",
         "",
-        "*ウスバー（正直者）*",
+        "*見本作者*",
         "",
-        "――ただ、強い！！",
+        "――これはあらすじの見本です。",
         "",
-        "二年前に勇者として召喚された。",
+        "本文ではありません。",
         "",
         "",
-        "## 第一章　勇者、日本に帰る",
+        "## 第一章　見本の章",
         "",
-        "### 第1話　勇者の帰還",
+        "### 第1話　見本の一話",
         "",
         "> **前書き**",
         ">",
@@ -306,7 +303,7 @@ fn the_markdown_export_uses_markup_and_relative_image_paths() {
         "> 次回もよろしく。",
         "",
         "",
-        "### 第2話　日本",
+        "### 第2話　見本の二話",
         "",
         "　二話目。",
         "",
@@ -484,8 +481,8 @@ fn the_epub_has_a_container_a_package_and_one_document_per_chapter() {
 
     // The package document is a valid OPF skeleton.
     let opf = entry(&summary.path, "OEBPS/content.opf");
-    assert!(opf.contains("<dc:title>二重勇者はすごいです！</dc:title>"));
-    assert!(opf.contains("<dc:creator>ウスバー（正直者）</dc:creator>"));
+    assert!(opf.contains("<dc:title>見本の勇者</dc:title>"));
+    assert!(opf.contains("<dc:creator>見本作者</dc:creator>"));
     assert!(opf.contains("<dc:language>ja</dc:language>"));
     assert!(opf.contains(&format!("<dc:identifier id=\"novel-url\">{NOVEL_URL}")));
     assert!(opf.contains("properties=\"nav\""));
@@ -536,8 +533,8 @@ fn the_epub_lists_every_chapter_in_its_navigation() {
 
     let nav = entry(&summary.path, "OEBPS/nav.xhtml");
     assert!(nav.contains("epub:type=\"toc\""));
-    assert!(nav.contains("<a href=\"text/0001.xhtml\">第1話　勇者の帰還</a>"));
-    assert!(nav.contains("<a href=\"text/0002.xhtml\">第2話　日本</a>"));
+    assert!(nav.contains("<a href=\"text/0001.xhtml\">第1話　見本の一話</a>"));
+    assert!(nav.contains("<a href=\"text/0002.xhtml\">第2話　見本の二話</a>"));
 }
 
 /// A four-chapter novel in two arcs, with one chapter that belongs to neither —
@@ -582,10 +579,10 @@ fn the_epub_navigation_nests_chapters_under_their_arc() {
     let nav = entry(&summary.path, "OEBPS/nav.xhtml");
     let expected = "\
 <ol>
-<li><span>第一章　勇者、日本に帰る</span>
+<li><span>第一章　見本の章</span>
 <ol>
-<li><a href=\"text/0001.xhtml\">第1話　勇者の帰還</a></li>
-<li><a href=\"text/0002.xhtml\">第2話　日本</a></li>
+<li><a href=\"text/0001.xhtml\">第1話　見本の一話</a></li>
+<li><a href=\"text/0002.xhtml\">第2話　見本の二話</a></li>
 </ol>
 </li>
 </ol>

@@ -51,7 +51,7 @@ The file is named after the novel's title, because that is what a human
 recognises in a file manager:
 
 ```
-exports/二重勇者はすごいです！.epub
+exports/見本の勇者.epub
 ```
 
 A title is free text and a file name is not, so the characters Windows forbids —

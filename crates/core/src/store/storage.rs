@@ -410,7 +410,7 @@ mod tests {
         let mut manifest = Manifest::new(
             SourceInfo {
                 id: "narou".into(),
-                novel_url: "https://ncode.syosetu.com/n1234ab/".into(),
+                novel_url: "https://ncode.syosetu.com/n0000aa/".into(),
                 site_title: None,
             },
             "テスト小説",
@@ -451,7 +451,7 @@ mod tests {
         let mut manifest = Manifest::new(
             SourceInfo {
                 id: "narou".into(),
-                novel_url: "https://ncode.syosetu.com/n1234ab/".into(),
+                novel_url: "https://ncode.syosetu.com/n0000aa/".into(),
                 site_title: None,
             },
             "older",

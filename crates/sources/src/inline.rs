@@ -392,14 +392,14 @@ mod tests {
     #[test]
     fn ruby_reads_the_base_from_the_ruby_and_the_reading_from_rt() {
         assert_eq!(
-            inlines("　<ruby><rb>魔王</rb><rp>（</rp><rt>俺</rt><rp>）</rp></ruby>の強化"),
+            inlines("　<ruby><rb>漢字</rb><rp>（</rp><rt>かんじ</rt><rp>）</rp></ruby>の見本"),
             vec![
                 text("　"),
                 Inline::Ruby {
-                    base: "魔王".into(),
-                    reading: "俺".into()
+                    base: "漢字".into(),
+                    reading: "かんじ".into()
                 },
-                text("の強化"),
+                text("の見本"),
             ],
             "the rp fallbacks are dropped, not folded into the base"
         );
@@ -493,12 +493,12 @@ mod tests {
         // not an address at all.
         assert_eq!(
             piece_list(
-                r#"<img src="//8873.mitemin.net/userpageimage/viewimagebig/icode/i78408/" alt="挿絵(By みてみん)" />"#,
-                "https://ncode.syosetu.com/n4890bm/288/"
+                r#"<img src="//img.example.test/view/00000/" alt="挿絵(By サンプル)" />"#,
+                "https://ncode.syosetu.com/n0000bb/288/"
             ),
             vec![picture(
-                "https://8873.mitemin.net/userpageimage/viewimagebig/icode/i78408/",
-                Some("挿絵(By みてみん)")
+                "https://img.example.test/view/00000/",
+                Some("挿絵(By サンプル)")
             )]
         );
     }
@@ -509,11 +509,11 @@ mod tests {
         // node; the picture is what the author put there.
         assert_eq!(
             piece_list(
-                r#"<a href="//8873.mitemin.net/i78408/" target="_blank"><img src="//8873.mitemin.net/userpageimage/viewimagebig/icode/i78408/" alt="挿絵" border="0" /></a>"#,
-                "https://ncode.syosetu.com/n4890bm/288/"
+                r#"<a href="//img.example.test/i00000/" target="_blank"><img src="//img.example.test/view/00000/" alt="挿絵" border="0" /></a>"#,
+                "https://ncode.syosetu.com/n0000bb/288/"
             ),
             vec![picture(
-                "https://8873.mitemin.net/userpageimage/viewimagebig/icode/i78408/",
+                "https://img.example.test/view/00000/",
                 Some("挿絵")
             )]
         );
@@ -525,11 +525,11 @@ mod tests {
         // where HTML says it goes and is where the site puts it.
         assert_eq!(
             piece_list(
-                r#"<a href="/img/user/196658/125290.png" alt="挿絵" name="img"><img src="/img/user/196658/125290.png" border="0" loading="lazy" /></a>"#,
-                "https://syosetu.org/novel/316401/1.html"
+                r#"<a href="/img/user/0000/000/000001.png" alt="挿絵" name="img"><img src="/img/user/0000/000/000001.png" border="0" loading="lazy" /></a>"#,
+                "https://syosetu.org/novel/000000/1.html"
             ),
             vec![picture(
-                "https://syosetu.org/img/user/196658/125290.png",
+                "https://syosetu.org/img/user/0000/000/000001.png",
                 Some("挿絵")
             )]
         );

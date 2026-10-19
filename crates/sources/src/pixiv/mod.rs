@@ -561,21 +561,21 @@ mod tests {
     #[test]
     fn every_url_into_a_novel_names_the_same_novel() {
         for raw in [
-            "https://www.pixiv.net/novel/show.php?id=14929293",
+            "https://www.pixiv.net/novel/show.php?id=10000004",
             // The language prefix the site serves other languages under.
-            "https://www.pixiv.net/en/novel/show.php?id=14929293",
-            "https://www.pixiv.net/zh-tw/novel/show.php?id=14929293",
+            "https://www.pixiv.net/en/novel/show.php?id=10000004",
+            "https://www.pixiv.net/zh-tw/novel/show.php?id=10000004",
             // What a browser adds when you copy the address bar.
-            "https://www.pixiv.net/novel/show.php?id=14929293#page=3",
-            "https://www.pixiv.net/novel/show.php?lang=en&id=14929293",
-            "https://www.pixiv.net/novel/show.php?id=14929293&foo=bar",
-            "https://www.pixiv.net/novel/show.php/?id=14929293",
+            "https://www.pixiv.net/novel/show.php?id=10000004#page=3",
+            "https://www.pixiv.net/novel/show.php?lang=en&id=10000004",
+            "https://www.pixiv.net/novel/show.php?id=10000004&foo=bar",
+            "https://www.pixiv.net/novel/show.php/?id=10000004",
             // The bare host redirects to `www`, and reaches the same novel.
-            "https://pixiv.net/novel/show.php?id=14929293",
+            "https://pixiv.net/novel/show.php?id=10000004",
         ] {
             assert_eq!(
                 target(raw),
-                Some(Target::Novel("14929293".to_string())),
+                Some(Target::Novel("10000004".to_string())),
                 "input: {raw}"
             );
         }
@@ -584,15 +584,15 @@ mod tests {
     #[test]
     fn every_url_into_a_series_names_the_same_series() {
         for raw in [
-            "https://www.pixiv.net/novel/series/11074941",
-            "https://www.pixiv.net/novel/series/11074941/",
-            "https://www.pixiv.net/en/novel/series/11074941",
-            "https://www.pixiv.net/en/novel/series/11074941#page=2",
-            "https://www.pixiv.net/novel/series/11074941?lang=en",
+            "https://www.pixiv.net/novel/series/10000006",
+            "https://www.pixiv.net/novel/series/10000006/",
+            "https://www.pixiv.net/en/novel/series/10000006",
+            "https://www.pixiv.net/en/novel/series/10000006#page=2",
+            "https://www.pixiv.net/novel/series/10000006?lang=en",
         ] {
             assert_eq!(
                 target(raw),
-                Some(Target::Series("11074941".to_string())),
+                Some(Target::Series("10000006".to_string())),
                 "input: {raw}"
             );
         }
@@ -610,7 +610,7 @@ mod tests {
             "https://www.pixiv.net/novel/show.php",
             "https://www.pixiv.net/novel/show.php?id=",
             "https://www.pixiv.net/novel/show.php?id=abc",
-            "https://www.pixiv.net/novel/show.php?id=14929293abc",
+            "https://www.pixiv.net/novel/show.php?id=10000004abc",
             "https://www.pixiv.net/novel/series/",
             "https://www.pixiv.net/novel/series/abc",
             // A `novel` segment deeper in a path is not a work.
@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(manifest.source.id, "pixiv");
         assert_eq!(
             manifest.source.novel_url,
-            "https://www.pixiv.net/novel/show.php?id=20000001"
+            "https://www.pixiv.net/novel/show.php?id=10000007"
         );
         assert_eq!(
             manifest.content_rating,
@@ -660,7 +660,7 @@ mod tests {
         assert_eq!(chapter.index, 1);
         assert_eq!(chapter.title, "短編サンプル");
         assert_eq!(
-            chapter.url, "https://www.pixiv.net/ajax/novel/20000001",
+            chapter.url, "https://www.pixiv.net/ajax/novel/10000007",
             "a chapter's url is the address its body is read from"
         );
         assert_eq!(chapter.file, "chapters/0001.json");
@@ -686,12 +686,12 @@ mod tests {
         let manifest = series_manifest(
             &series,
             &entries,
-            "https://www.pixiv.net/novel/series/11074941",
+            "https://www.pixiv.net/novel/series/10000006",
         );
 
         assert_eq!(manifest.title, "サンプルシリーズ");
         assert_eq!(
-            manifest.source.novel_url, "https://www.pixiv.net/novel/series/11074941",
+            manifest.source.novel_url, "https://www.pixiv.net/novel/series/10000006",
             "the work's url is the page `nvd update` resolves again, and this adapter can"
         );
         assert_eq!(manifest.author.as_deref(), Some("サンプル作者"));
@@ -706,7 +706,7 @@ mod tests {
             manifest.cover_url.as_deref(),
             Some(
                 "https://i.pximg.net/novel-cover-original/img/2021/03/26/15/00/36/\
-                 sci11074941_deadbeef.png"
+                 sci10000006_deadbeef.png"
             ),
             "the original cover, not one of the resized derivatives"
         );
@@ -737,7 +737,7 @@ mod tests {
                 .map(|chapter| chapter.url.as_str())
                 .collect::<Vec<_>>(),
             vec![
-                "https://www.pixiv.net/ajax/novel/14929293",
+                "https://www.pixiv.net/ajax/novel/10000004",
                 "https://www.pixiv.net/ajax/novel/15101193",
                 "https://www.pixiv.net/ajax/novel/15482204",
             ]
@@ -778,14 +778,14 @@ mod tests {
     #[test]
     fn the_series_listing_is_asked_for_in_the_order_the_site_pages_by() {
         assert_eq!(
-            series_content_api("11074941", None),
-            "https://www.pixiv.net/ajax/novel/series_content/11074941\
+            series_content_api("10000006", None),
+            "https://www.pixiv.net/ajax/novel/series_content/10000006\
              ?limit=10&is_first_page=true&work_category=novel",
             "the first page must not carry `last_order` at all: an empty one is a 400"
         );
         assert_eq!(
-            series_content_api("11074941", Some(2)),
-            "https://www.pixiv.net/ajax/novel/series_content/11074941\
+            series_content_api("10000006", Some(2)),
+            "https://www.pixiv.net/ajax/novel/series_content/10000006\
              ?limit=10&last_order=2&work_category=novel"
         );
     }
@@ -793,20 +793,20 @@ mod tests {
     #[test]
     fn a_work_has_one_address_the_site_answers_at() {
         for raw in [
-            "https://www.pixiv.net/novel/show.php?id=14929293",
-            "https://www.pixiv.net/en/novel/show.php?id=14929293#page=3",
+            "https://www.pixiv.net/novel/show.php?id=10000004",
+            "https://www.pixiv.net/en/novel/show.php?id=10000004#page=3",
         ] {
             assert_eq!(
                 answer_url(&Url::parse(raw).unwrap()).as_deref(),
-                Some("https://www.pixiv.net/ajax/novel/14929293"),
+                Some("https://www.pixiv.net/ajax/novel/10000004"),
                 "input: {raw}"
             );
         }
 
         assert_eq!(
-            answer_url(&Url::parse("https://www.pixiv.net/novel/series/11074941").unwrap())
+            answer_url(&Url::parse("https://www.pixiv.net/novel/series/10000006").unwrap())
                 .as_deref(),
-            Some("https://www.pixiv.net/ajax/novel/series/11074941")
+            Some("https://www.pixiv.net/ajax/novel/series/10000006")
         );
 
         assert_eq!(

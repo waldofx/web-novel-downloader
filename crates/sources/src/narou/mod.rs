@@ -70,7 +70,7 @@ impl Narou {
 
     /// The canonical table-of-contents URL for a novel, from any URL on it.
     ///
-    /// `…/n0608gd/5/` and `…/n0608gd/?p=2` both reduce to `…/n0608gd/`, so a
+    /// `…/n0000aa/5/` and `…/n0000aa/?p=2` both reduce to `…/n0000aa/`, so a
     /// user can paste whatever they have open.
     fn canonical_novel_url(url: &Url) -> Option<Url> {
         if !matches!(url.scheme(), "http" | "https") {
@@ -218,23 +218,23 @@ mod tests {
 
     #[test]
     fn both_narou_family_hosts_are_matched() {
-        assert!(matches("https://ncode.syosetu.com/n1234ab/"));
-        assert!(matches("https://ncode.syosetu.com/n1234ab/1/"));
-        assert!(matches("https://novel18.syosetu.com/n8309id/"));
+        assert!(matches("https://ncode.syosetu.com/n0000aa/"));
+        assert!(matches("https://ncode.syosetu.com/n0000aa/1/"));
+        assert!(matches("https://novel18.syosetu.com/n0000dd/"));
     }
 
     #[test]
     fn host_matching_is_exact_and_case_insensitive() {
-        assert!(matches("https://NCODE.SYOSETU.COM/n1234ab/"));
+        assert!(matches("https://NCODE.SYOSETU.COM/n0000aa/"));
         // A lookalike domain must not be claimed.
-        assert!(!matches("https://ncode.syosetu.com.evil.example/n1234ab/"));
-        assert!(!matches("https://syosetu.com/n1234ab/"));
+        assert!(!matches("https://ncode.syosetu.com.evil.example/n0000aa/"));
+        assert!(!matches("https://syosetu.com/n0000aa/"));
     }
 
     #[test]
     fn other_schemes_and_hosts_are_not_matched() {
-        assert!(!matches("ftp://ncode.syosetu.com/n1234ab/"));
-        assert!(!matches("https://syosetu.org/novel/288118/"));
+        assert!(!matches("ftp://ncode.syosetu.com/n0000aa/"));
+        assert!(!matches("https://syosetu.org/novel/000001/"));
         assert!(!matches("https://kakuyomu.jp/works/1234"));
     }
 
@@ -242,24 +242,24 @@ mod tests {
     fn any_url_on_a_novel_reduces_to_its_table_of_contents() {
         for (input, want) in [
             (
-                "https://ncode.syosetu.com/n0608gd/",
-                "https://ncode.syosetu.com/n0608gd/",
+                "https://ncode.syosetu.com/n0000aa/",
+                "https://ncode.syosetu.com/n0000aa/",
             ),
             (
-                "https://ncode.syosetu.com/n0608gd",
-                "https://ncode.syosetu.com/n0608gd/",
+                "https://ncode.syosetu.com/n0000aa",
+                "https://ncode.syosetu.com/n0000aa/",
             ),
             (
-                "https://ncode.syosetu.com/n0608gd/5/",
-                "https://ncode.syosetu.com/n0608gd/",
+                "https://ncode.syosetu.com/n0000aa/5/",
+                "https://ncode.syosetu.com/n0000aa/",
             ),
             (
-                "https://ncode.syosetu.com/n0608gd/?p=2",
-                "https://ncode.syosetu.com/n0608gd/",
+                "https://ncode.syosetu.com/n0000aa/?p=2",
+                "https://ncode.syosetu.com/n0000aa/",
             ),
             (
-                "https://novel18.syosetu.com/n8309id/3/",
-                "https://novel18.syosetu.com/n8309id/",
+                "https://novel18.syosetu.com/n0000dd/3/",
+                "https://novel18.syosetu.com/n0000dd/",
             ),
         ] {
             assert_eq!(
@@ -273,24 +273,24 @@ mod tests {
     #[test]
     fn urls_without_an_ncode_are_rejected() {
         assert!(Narou::canonical_novel_url(&url("https://ncode.syosetu.com/")).is_none());
-        assert!(Narou::canonical_novel_url(&url("https://example.com/n0608gd/")).is_none());
+        assert!(Narou::canonical_novel_url(&url("https://example.com/n0000aa/")).is_none());
     }
 
     #[test]
     fn adult_host_selects_the_adult_rating() {
         assert_eq!(
-            rating_for(&url("https://novel18.syosetu.com/n8309id/")),
+            rating_for(&url("https://novel18.syosetu.com/n0000dd/")),
             ContentRating::Adult
         );
         assert_eq!(
-            rating_for(&url("https://ncode.syosetu.com/n0608gd/")),
+            rating_for(&url("https://ncode.syosetu.com/n0000aa/")),
             ContentRating::General
         );
     }
 
     #[test]
     fn a_novel_with_no_rows_gets_one_inline_chapter() {
-        let base = url("https://ncode.syosetu.com/n5589cg/");
+        let base = url("https://ncode.syosetu.com/n0000cc/");
         let chapters = chapter_metas(Vec::new(), "短編のタイトル", &base);
 
         assert_eq!(chapters.len(), 1);

@@ -118,7 +118,7 @@ fn revision_of(cell: &ElementRef) -> Option<String> {
         .find_map(parse_datetime)
 }
 
-/// `作者：ウスバー（正直者）` → `ウスバー（正直者）`.
+/// `作者：見本作者` → `見本作者`.
 fn strip_author_prefix(text: &str) -> String {
     let text = text.trim_ascii();
     text.strip_prefix("作者：")
@@ -128,7 +128,7 @@ fn strip_author_prefix(text: &str) -> String {
         .to_string()
 }
 
-/// `…/n0608gd/12/` → `12`.
+/// `…/n0000aa/12/` → `12`.
 fn chapter_index_from_href(href: &str) -> Option<u32> {
     href.trim_end_matches('/').rsplit('/').next()?.parse().ok()
 }
@@ -217,28 +217,25 @@ mod tests {
     fn toc_metadata_arcs_and_chapters_are_parsed() {
         let page = parse_toc_page(
             NAROU_TOC,
-            &url("https://ncode.syosetu.com/n0608gd/"),
+            &url("https://ncode.syosetu.com/n0000aa/"),
             None,
             0,
         );
 
-        assert_eq!(
-            page.title.as_deref(),
-            Some("二重勇者はすごいです！　～テスト～")
-        );
-        assert_eq!(page.author.as_deref(), Some("ウスバー（正直者）"));
+        assert_eq!(page.title.as_deref(), Some("見本の勇者　～サンプル～"));
+        assert_eq!(page.author.as_deref(), Some("見本作者"));
         assert_eq!(
             page.synopsis.as_deref(),
-            Some("――ただ、強い！！\n\n二年前に勇者として召喚された。"),
+            Some("――これはあらすじの見本です。\n\n本文ではありません。"),
             "the <br />s become newlines"
         );
 
         assert_eq!(page.entries.len(), 3);
         let first = &page.entries[0];
         assert_eq!(first.index, 1);
-        assert_eq!(first.title, "１．勇者の帰還");
-        assert_eq!(first.url, "https://ncode.syosetu.com/n0608gd/1/");
-        assert_eq!(first.arc.as_deref(), Some("第一章　勇者、日本に帰る"));
+        assert_eq!(first.title, "１．見本の一話");
+        assert_eq!(first.url, "https://ncode.syosetu.com/n0000aa/1/");
+        assert_eq!(first.arc.as_deref(), Some("第一章　見本の章"));
         assert_eq!(
             first.published_at.as_deref(),
             Some("2020-04-01T23:23:00+09:00")
@@ -247,11 +244,11 @@ mod tests {
         assert_eq!(first.file, "chapters/0001.json");
 
         let third = &page.entries[2];
-        assert_eq!(third.arc.as_deref(), Some("第二章　再会"));
+        assert_eq!(third.arc.as_deref(), Some("第二章　見本の二章"));
 
         assert_eq!(
             page.next_page.as_deref(),
-            Some("https://ncode.syosetu.com/n0608gd/?p=2")
+            Some("https://ncode.syosetu.com/n0000aa/?p=2")
         );
         assert_eq!(page.end_index, 3);
     }
@@ -260,20 +257,20 @@ mod tests {
     fn the_first_page_of_a_paginated_toc_reports_its_state() {
         let page = parse_toc_page(
             NAROU_TOC,
-            &url("https://ncode.syosetu.com/n0608gd/"),
+            &url("https://ncode.syosetu.com/n0000aa/"),
             None,
             0,
         );
         // The next page must continue numbering and keep the arc in effect.
         assert_eq!(page.end_index, 3);
-        assert_eq!(page.end_arc.as_deref(), Some("第二章　再会"));
+        assert_eq!(page.end_arc.as_deref(), Some("第二章　見本の二章"));
     }
 
     #[test]
     fn a_revised_chapter_records_the_time_it_was_revised() {
         let page = parse_toc_page(
             NAROU_TOC,
-            &url("https://ncode.syosetu.com/n0608gd/"),
+            &url("https://ncode.syosetu.com/n0000aa/"),
             None,
             0,
         );
@@ -302,11 +299,11 @@ mod tests {
         // for a block page it does not recognise.
         let html = r#"<html><body><div class="p-eplist">
           <div class="p-eplist__sublist">
-            <a href="/n0608gd/1/" class="p-eplist__subtitle">一</a>
-            <div class="p-eplist__update"> 2020/04/01 23:23 <span title="改稿しました">（改）</span> </div>
+            <a href="/n0000aa/1/" class="p-eplist__subtitle">一</a>
+            <div class="p-eplist__update"> 2020/04/01 23:23 <span title="改稿メモの見本">（改）</span> </div>
           </div>
         </div></body></html>"#;
-        let page = parse_toc_page(html, &url("https://ncode.syosetu.com/n0608gd/"), None, 0);
+        let page = parse_toc_page(html, &url("https://ncode.syosetu.com/n0000aa/"), None, 0);
 
         assert_eq!(page.entries.len(), 1);
         assert_eq!(page.entries[0].revised_at, None);
@@ -346,17 +343,14 @@ mod tests {
 
     #[test]
     fn chapter_indices_come_from_the_url() {
-        assert_eq!(chapter_index_from_href("/n0608gd/1/"), Some(1));
-        assert_eq!(chapter_index_from_href("/n0608gd/42"), Some(42));
-        assert_eq!(chapter_index_from_href("/n0608gd/"), None);
+        assert_eq!(chapter_index_from_href("/n0000aa/1/"), Some(1));
+        assert_eq!(chapter_index_from_href("/n0000aa/42"), Some(42));
+        assert_eq!(chapter_index_from_href("/n0000aa/"), None);
     }
 
     #[test]
     fn the_author_label_is_removed_when_present() {
-        assert_eq!(
-            strip_author_prefix("作者：ウスバー（正直者） "),
-            "ウスバー（正直者）"
-        );
+        assert_eq!(strip_author_prefix("作者：見本作者 "), "見本作者");
         assert_eq!(strip_author_prefix("作者: かずは"), "かずは");
         assert_eq!(strip_author_prefix(" 名前だけ "), "名前だけ");
     }
