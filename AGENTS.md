@@ -43,6 +43,14 @@ Global OpenCode skills carry the portable version of these conventions:
 
 ## Before you change something
 
+- **Nothing from a real novel is committed.** Not a line of prose, not a title,
+  not an author's name, not a work's address. A fixture, a doc example or a test
+  carries **made-up** words in the shape of the real thing: the site's own markup
+  and vocabulary stay exactly as captured, and the work's own words and ids are
+  replaced with obvious placeholders
+  ([testing.md](docs/engineering/testing.md#fixtures)). The real capture stays in
+  the gitignored `captures/`, and the works a live test runs against stay in the
+  gitignored `fixtures.local.json`.
 - Read [docs/engineering/gotchas.md](docs/engineering/gotchas.md) first. It is the
   cheapest page in the repository, and it is append-only: if something surprises
   you, add a row.
