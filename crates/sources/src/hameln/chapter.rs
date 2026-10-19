@@ -1,5 +1,9 @@
 //! One chapter page: title and body.
 //!
+//! The title is the site's big-text span just above the body. The header states
+//! the *work's* title in the same shape and comes first, so the first match is
+//! not the chapter's (#51).
+//!
 //! The body lives in `#honbun` as a run of `<p id="N">` lines, one per
 //! paragraph; a paragraph whose text is only an ideographic space (or empty) is a
 //! blank line, and runs of those are scene breaks via the shared rule.
