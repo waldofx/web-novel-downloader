@@ -9,11 +9,12 @@
 //! where the site puts it, so the picture keeps the description the author gave
 //! it and the link around it, which points at the same picture, is not kept.
 
+use super::SEL_TITLE_SPAN;
 use crate::SourceError;
 use crate::blocks;
-use crate::dom::{element_text, first_text};
+use crate::dom::element_text;
 use crate::inline::{self, Piece, plain_text};
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 use wnd_core::{Block, Chapter, ChapterMeta};
 
 /// Parse a chapter page into the node model.
@@ -40,21 +41,10 @@ pub fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceEr
 
     let mut chapter = Chapter::new(meta.index, meta.title.clone());
 
-    if let Ok(title_selector) = Selector::parse(r#"span[style*="font-size:120%"]"#) {
-        if let Some(title) = first_text(&document, &title_selector) {
-            let title = title.trim().to_string();
-            if !title.is_empty() {
-                // The span holds "arc title<br>chapter title"; keep the chapter's.
-                let title = title
-                    .rsplit('\n')
-                    .next()
-                    .unwrap_or(&title)
-                    .trim()
-                    .to_string();
-                if !title.is_empty() {
-                    chapter.title = title;
-                }
-            }
+    if let Some(title) = title_of(&container) {
+        let title = title.trim().to_string();
+        if !title.is_empty() {
+            chapter.title = title;
         }
     }
 
@@ -75,6 +65,28 @@ pub fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceEr
 
     chapter.nodes = blocks::from_line_blocks(lines);
     Ok(chapter)
+}
+
+/// The chapter's own title: the big-text span just above the body.
+///
+/// The page states the *work's* title in the same shape, in the header, and the
+/// header comes first — so the first match is the work and the chapter's is the
+/// one before the body (#51). A span holding `arc title<br>chapter title` keeps
+/// the chapter's line. A page with no such span keeps the title the table of
+/// contents gave, which names the chapter either way.
+fn title_of(body: &ElementRef) -> Option<String> {
+    let mut node = body.prev_sibling();
+    while let Some(current) = node {
+        node = current.prev_sibling();
+        if let Some(element) = ElementRef::wrap(current) {
+            if SEL_TITLE_SPAN.matches(&element) {
+                let text = element_text(&element);
+                let title = text.rsplit('\n').next().unwrap_or(&text);
+                return Some(title.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -103,17 +115,52 @@ mod tests {
     }
 
     #[test]
-    fn a_chapter_parses_a_title_and_a_body() {
-        let meta = chapter_meta(1, "placeholder");
+    fn a_chapter_takes_its_own_title_and_not_the_work_s() {
+        // The header states the work's title in the same `font-size:120%` span a
+        // chapter's title uses, and the header comes first (#51). `meta.title`
+        // is the work's title here on purpose: a parser that read the header's
+        // span would match it and the test would catch that.
+        let meta = chapter_meta(1, "見本の作品　～サンプル～");
         let chapter = parse_chapter(HAMELN_CHAPTER, &meta).unwrap();
 
         assert_eq!(chapter.index, 1);
-        // The header and the body each carry a `font-size:120%` span, and the
-        // header's comes first, so on a real page this is the work's title and
-        // not the chapter's (#51). The fixture keeps both spans in the order the
-        // site writes them; only emptiness is asserted until that is settled.
-        assert!(!chapter.title.is_empty(), "title: {:?}", chapter.title);
+        assert_eq!(
+            chapter.title, "第一話　見本の一話",
+            "the span above the body holds `arc<br>chapter title`; the title is the chapter's"
+        );
         assert!(!chapter.nodes.is_empty(), "body must not be empty");
+    }
+
+    #[test]
+    fn a_chapter_title_with_no_arc_is_the_whole_span() {
+        // Three of the five captured chapter pages have no arc: their span holds
+        // the chapter's title and nothing else, and the `<br>` split leaves it
+        // be.
+        let meta = chapter_meta(1, "見本の作品");
+        let html = r#"<html><body>
+            <p><span style="font-size:120%"><a href="https://syosetu.org/novel/000000/">見本の作品</a></span> 　 作：<a href="https://syosetu.org/user/000000/">見本作者</a><br></p>
+            <span style="font-size:120%"> 合鍵と昼食の見本</span>
+            <div id="honbun"><p id="1"> 本文の見本です。</p></div>
+        </body></html>"#;
+
+        let chapter = parse_chapter(html, &meta).unwrap();
+
+        assert_eq!(chapter.title, "合鍵と昼食の見本");
+    }
+
+    #[test]
+    fn a_page_with_no_title_of_its_own_keeps_the_toc_title() {
+        // The header's span is all this page offers, and it is the work's title:
+        // the table of contents already said what the chapter is called.
+        let meta = chapter_meta(1, "目次の見本の一話");
+        let html = r#"<html><body>
+            <p><span style="font-size:120%"><a href="https://syosetu.org/novel/000000/">見本の作品</a></span> 　 作：<a href="https://syosetu.org/user/000000/">見本作者</a><br></p>
+            <div id="honbun"><p id="1"> 本文の見本です。</p></div>
+        </body></html>"#;
+
+        let chapter = parse_chapter(html, &meta).unwrap();
+
+        assert_eq!(chapter.title, "目次の見本の一話");
     }
 
     #[test]
