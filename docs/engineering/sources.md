@@ -63,22 +63,23 @@ the manifest:
 | furigana | plain-text notation, `｜漢字《かんじ》` | real `<ruby><rb>…</rb><rp>（</rp><rt>…</rt><rp>）</rp></ruby>` |
 | emphasis | `《《強調》》` in the text | `<strong>` / `<em>` |
 | arcs | inferred from `第N章` headings in the `arc` column | real chapter dividers, titled in the episode list |
-| numbering | in the URL (`/n0608gd/3/`) | opaque ids, so chapters are numbered from reading order |
+| numbering | in the URL (`/n0000aa/3/`) | opaque ids, so chapters are numbered from reading order |
 | chapter dates | JST, no zone (`…T23:23:00+09:00`) | a UTC instant (`…T22:08:26.000Z`) |
 
 ### The snapshot is the source, not a shortcut
 
 A Kakuyomu work page is a Next.js app. It ships a `__NEXT_DATA__` snapshot
 holding everything the client will render — and it renders almost none of it
-server-side. The work used to write these tests shows **seven** episode links in
-its HTML and **1069** episodes in its snapshot, grouped into 23 arcs, and the
+server-side. The long work this decision was made against rendered **seven**
+episode links into its HTML and listed **1069** episodes in its snapshot, and the
 page's own `TableOfContentsChapter` reference for an un-arc'd work has a
 *deliberately empty id*.
 
 So the episode list comes from the snapshot and the body comes from the episode
-page's HTML (episode pages carry no snapshot at all). The live test asserts the
-episode count with a number in the message: if the adapter ever goes back to
-reading HTML, it fails as "you downloaded one chapter of a thousand".
+page's HTML (episode pages carry no snapshot at all). The live test runs against a
+work with more than a hundred episodes and says so in the message: if the adapter
+ever goes back to reading HTML, it fails as "you downloaded one chapter of a
+thousand".
 
 A snapshot that lists a chapter or an episode it does not contain is a truncated
 payload and is an error, not a short novel.
@@ -224,10 +225,16 @@ access control: the tool never bypasses paywalls, logins, or age gates.
 
 ## Test fixtures
 
-Concrete example works used to develop and verify adapters — including adult
-titles — are kept in a **gitignored** local file, `fixtures.local.json`, so this
-roadmap stays public-safe and personal reading lists are not published. Copy
-`fixtures.local.example.json` and fill it in.
+The live tests take the works they hit from a **gitignored** local file,
+`fixtures.local.json`, so this roadmap stays public-safe and personal reading
+lists are not published. Copy `fixtures.local.example.json` — whose URLs are all
+obvious placeholders — and fill it in with real ones.
+
+A test asks the file for a site and takes the first entry that fits the shape it
+needs: a multi-chapter work, a one-chapter work, a series with illustrations.
+When the file is absent, the site is absent, or nothing fits, the test prints
+what it was looking for and skips rather than failing — and no test ever
+hard-codes a work, so a red result means the adapter rather than a stale id.
 
 ## Adding an adapter
 
@@ -235,8 +242,9 @@ roadmap stays public-safe and personal reading lists are not published. Copy
    Use one file per job once it needs more than one (see `narou/`, `kakuyomu/`).
 2. Register it in `registry()` in `crates/sources/src/lib.rs`. **Order matters**:
    the first adapter whose `matches()` returns true wins.
-3. Capture real pages into `crates/sources/tests/fixtures/<site>/` and write unit
-   tests against them.
+3. Capture real pages into the gitignored `captures/`, then commit a **trimmed**
+   copy under `crates/sources/tests/fixtures/<site>/`, with the work's own words
+   and ids replaced by placeholders ([testing.md](testing.md#fixtures)).
 4. Add a `#[ignore]`d live test in `crates/sources/tests/<site>_live.rs`, and run
    it by hand at least once against the real site.
 5. Add the site name to the scope list in `CONTRIBUTING.md`.

@@ -6,9 +6,11 @@
 //! cargo test -p wnd-sources --test pixiv_live -- --ignored --nocapture
 //! ```
 //!
-//! Both works below are all-ages and were on pixiv's daily novel ranking on
-//! 2026-10-18, when this adapter was written. They are pinned rather than looked
-//! up at run time so that a red test means the adapter, not the ranking.
+//! The works they hit are taken from the gitignored `fixtures.local.json` (see
+//! `fixtures.local.example.json`), never hard-coded: this repository holds no
+//! real novel identifier. Each test says which shape of work it needs — a series
+//! of more than one novel, a standalone novel the reader pages — takes the first
+//! configured target that fits, and skips with a note when none does.
 //!
 //! Each test also re-reads the API answer the adapter itself holds a URL for and
 //! checks the manifest against it. That is deliberate: the numbers a live test
@@ -18,26 +20,48 @@
 
 mod common;
 
+use std::collections::HashSet;
 use url::Url;
 use wnd_core::ContentRating;
 use wnd_sources::pixiv::api;
 use wnd_sources::{find, registry};
 
-/// A novel that belongs to a series, and a URL that names only this novel of it.
-const IN_A_SERIES: &str = "https://www.pixiv.net/novel/show.php?id=29392114";
-
-/// A novel in no series, shown by the site's reader in five pages.
-const STANDALONE: &str = "https://www.pixiv.net/novel/show.php?id=29391720";
-
 #[test]
 #[ignore = "hits the network"]
 fn a_url_inside_a_series_downloads_the_whole_series() {
-    let target = Url::parse(IN_A_SERIES).unwrap();
     let sources = registry();
-    let source = find(&sources, &target).expect("the pixiv adapter handles this");
     let client = common::client();
 
-    let manifest = source.novel(&client, &target).expect("the series");
+    let targets = common::targets("pixiv");
+    if targets.is_empty() {
+        common::note_no_target("pixiv");
+        return;
+    }
+
+    // A URL that names one novel of a series; the work the adapter must return is
+    // the series. The first configured target shaped that way is the one this
+    // runs against.
+    let mut chosen = None;
+    for target in targets {
+        let source = find(&sources, &target).expect("the pixiv adapter handles this");
+        let manifest = source.novel(&client, &target).expect("the work");
+        if manifest.source.novel_url.contains("/novel/series/") && manifest.chapters.len() > 1 {
+            chosen = Some((target, manifest));
+            break;
+        }
+        println!(
+            "note: {} is not a series of more than one novel — trying the next",
+            manifest.source.novel_url
+        );
+    }
+    let Some((target, manifest)) = chosen else {
+        println!(
+            "note: no `pixiv` target that is a series of more than one novel — skipping \
+             (see fixtures.local.example.json)"
+        );
+        return;
+    };
+    let source = find(&sources, &target).expect("the pixiv adapter handles this");
 
     println!("title:    {}", manifest.title);
     println!("author:   {:?}", manifest.author);
@@ -50,34 +74,38 @@ fn a_url_inside_a_series_downloads_the_whole_series() {
     }
 
     assert_eq!(manifest.source.id, "pixiv");
+
+    // Re-read the work's own answer and check the counts and the rating against
+    // it, rather than against a number pinned here.
+    let answer = wnd_sources::pixiv::answer_url(&Url::parse(&manifest.source.novel_url).unwrap())
+        .expect("the work's own answer");
+    let series: api::Series = read(&client, &answer);
+
     assert_eq!(
         manifest.content_rating,
-        ContentRating::General,
-        "this work is all-ages, and the rating is read from the work"
+        if series.x_restrict >= 1 {
+            ContentRating::Adult
+        } else {
+            ContentRating::General
+        },
+        "the rating is read from the work's xRestrict"
     );
-    assert!(
-        manifest.source.novel_url.contains("/novel/series/"),
-        "the work is the series, so that is what the manifest points at: {}",
-        manifest.source.novel_url
-    );
-    assert!(
-        !manifest.title.is_empty() && manifest.cover_url.is_some(),
-        "the series answer is where a series' own title and cover live"
+    assert_eq!(
+        manifest.language,
+        if series.language.trim_ascii().is_empty() {
+            "ja".to_string()
+        } else {
+            series.language.clone()
+        },
+        "the language is the work's, or Japanese when it states none"
     );
 
     // The URL named one novel. If the adapter had read it as the work, this
     // would be one chapter and nothing would have complained.
-    let answer = wnd_sources::pixiv::answer_url(&Url::parse(&manifest.source.novel_url).unwrap())
-        .expect("the work's own answer");
-    let series: api::Series = read(&client, &answer);
     assert_eq!(
         manifest.chapters.len() as i64,
         series.published_content_count,
         "every novel the series states must be listed, not just the one the URL named"
-    );
-    assert!(
-        manifest.chapters.len() > 1,
-        "a series with one novel would make this test prove nothing"
     );
     assert_eq!(
         manifest
@@ -89,10 +117,23 @@ fn a_url_inside_a_series_downloads_the_whole_series() {
         "chapters are numbered in reading order, from one"
     );
 
+    let urls: HashSet<&str> = manifest.chapters.iter().map(|c| c.url.as_str()).collect();
+    assert_eq!(
+        urls.len(),
+        manifest.chapters.len(),
+        "every chapter has its own page"
+    );
+    assert!(
+        manifest
+            .chapters
+            .iter()
+            .all(|c| c.url.starts_with("https://www.pixiv.net/ajax/novel/")),
+        "a pixiv chapter's URL is the API address its body is read from"
+    );
+
     let first = manifest.chapters.first().expect("a first chapter");
     let chapter = source.chapter(&client, first).expect("the first chapter");
     println!("first chapter: {} blocks", chapter.nodes.len());
-
     assert!(
         !chapter.nodes.is_empty(),
         "a chapter that parses to nothing is not an empty chapter"
@@ -102,12 +143,49 @@ fn a_url_inside_a_series_downloads_the_whole_series() {
 #[test]
 #[ignore = "hits the network"]
 fn a_novel_in_no_series_is_one_chapter_with_its_reader_pages_joined() {
-    let target = Url::parse(STANDALONE).unwrap();
     let sources = registry();
-    let source = find(&sources, &target).expect("the pixiv adapter handles this");
     let client = common::client();
 
-    let manifest = source.novel(&client, &target).expect("the novel");
+    let targets = common::targets("pixiv");
+    if targets.is_empty() {
+        common::note_no_target("pixiv");
+        return;
+    }
+
+    // A standalone novel — one chapter — whose text the site shows in more than
+    // one reader page, so that joining those pages is actually exercised. The
+    // first configured target shaped that way is the one this runs against.
+    let mut chosen = None;
+    for target in targets {
+        let source = find(&sources, &target).expect("the pixiv adapter handles this");
+        let manifest = source.novel(&client, &target).expect("the novel");
+        if manifest.chapters.len() != 1 {
+            println!(
+                "note: {} is a work of {} chapters, not a standalone novel — trying the next",
+                manifest.source.novel_url,
+                manifest.chapters.len()
+            );
+            continue;
+        }
+        let novel: api::Novel = read(&client, &manifest.chapters[0].url);
+        if !novel.content.contains("[newpage]") {
+            println!(
+                "note: {} has no reader pages — trying the next",
+                manifest.source.novel_url
+            );
+            continue;
+        }
+        chosen = Some((target, manifest, novel));
+        break;
+    }
+    let Some((target, manifest, novel)) = chosen else {
+        println!(
+            "note: no `pixiv` standalone novel with reader pages — skipping \
+             (see fixtures.local.example.json)"
+        );
+        return;
+    };
+    let source = find(&sources, &target).expect("the pixiv adapter handles this");
 
     println!("title:    {}", manifest.title);
     println!("author:   {:?}", manifest.author);
@@ -121,10 +199,12 @@ fn a_novel_in_no_series_is_one_chapter_with_its_reader_pages_joined() {
 
     let meta = &manifest.chapters[0];
     assert!(meta.url.starts_with("https://www.pixiv.net/ajax/novel/"));
-    assert!(
-        meta.published_at.is_some(),
-        "the site states when a chapter appeared, so the manifest keeps it"
-    );
+    if !novel.create_date.trim_ascii().is_empty() {
+        assert!(
+            meta.published_at.is_some(),
+            "the site states when a chapter appeared, so the manifest keeps it"
+        );
+    }
 
     let chapter = source.chapter(&client, meta).expect("the chapter");
     println!("blocks:   {}", chapter.nodes.len());
@@ -133,7 +213,6 @@ fn a_novel_in_no_series_is_one_chapter_with_its_reader_pages_joined() {
     // text with `[newpage]` where the slices meet. Read the answer again and
     // count what was there: an adapter that stopped at the first page would
     // come back with a handful of blocks and no complaint.
-    let novel: api::Novel = read(&client, &meta.url);
     let new_page_lines = novel
         .content
         .lines()
@@ -153,10 +232,6 @@ fn a_novel_in_no_series_is_one_chapter_with_its_reader_pages_joined() {
         novel.content.matches("[newpage]").count()
     );
 
-    assert!(
-        novel.content.contains("[newpage]"),
-        "this work is pinned because its text has reader pages"
-    );
     assert!(
         chapter.nodes.len() >= prose_lines,
         "every line the site sent must reach the chapter: {} blocks for {prose_lines} lines",

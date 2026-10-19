@@ -9,50 +9,92 @@
 //! cargo test -p wnd-download --test pixiv_live -- --ignored --nocapture
 //! ```
 //!
-//! The work is all-ages and was on pixiv's daily novel ranking on 2026-10-18. It
-//! is pinned rather than looked up at run time, so that a red test means the code
-//! rather than the ranking. It is a series with a cover and illustrations inside
-//! its chapters, and the whole of it is downloaded: a picture that is not fetched
-//! is only visible in a chapter that is, and one chapter proves nothing about the
-//! naming, which counts per chapter.
+//! The work is taken from the gitignored `fixtures.local.json` (see
+//! `fixtures.local.example.json`), never hard-coded: this repository holds no
+//! real novel identifier. This test needs a series with a cover and pictures
+//! inside its chapters — a picture that is not fetched is only visible in a
+//! chapter that is, and one chapter proves nothing about the naming, which
+//! counts per chapter. It takes the first configured target that fits and skips
+//! with a note when none does.
 
 mod common;
 
 use common::TempDir;
-use url::Url;
 use wnd_core::store::storage::hash_bytes;
 use wnd_core::{Block, FetchPolicy, HttpClient, NovelDir};
 use wnd_download::{DownloadOptions, UpdateOptions, download_from, update_from};
 
-/// A series whose chapters carry illustrations of their own as well as a cover.
-const ILLUSTRATED: &str = "https://www.pixiv.net/novel/show.php?id=29400600";
-
 #[test]
 #[ignore = "hits the network"]
 fn pixiv_illustrations_are_fetched_stored_and_pointed_at() {
-    let target = Url::parse(ILLUSTRATED).unwrap();
     let sources = wnd_sources::registry();
-    let source = wnd_sources::find(&sources, &target).expect("the pixiv adapter handles this");
     let client = HttpClient::new(FetchPolicy::default()).expect("client");
-    let dir = TempDir::new("pixiv-illustrated");
-
     let options = DownloadOptions::default();
-    let summary = download_from(source, &client, &target, dir.path(), &options, |_| {})
-        .expect("the download");
+
+    let targets = common::targets("pixiv");
+    if targets.is_empty() {
+        common::note_no_target("pixiv");
+        return;
+    }
+
+    // A work with a cover and more than one chapter is the shape this test can
+    // use; whether the chapters actually carry pictures is only visible after
+    // the fetch, so a work that turns out not to is a skip, not a failure.
+    let mut chosen = None;
+    for target in targets {
+        let source = wnd_sources::find(&sources, &target).expect("the pixiv adapter handles this");
+        let manifest = source.novel(&client, &target).expect("the work");
+        if manifest.chapters.len() <= 1 || manifest.cover_url.is_none() {
+            println!(
+                "note: {} has {} chapter(s) and {} cover — trying the next",
+                manifest.source.novel_url,
+                manifest.chapters.len(),
+                if manifest.cover_url.is_some() {
+                    "a"
+                } else {
+                    "no"
+                }
+            );
+            continue;
+        }
+
+        let dir = TempDir::new("pixiv-illustrated");
+        let summary = download_from(source, &client, &target, dir.path(), &options, |_| {})
+            .expect("the download");
+
+        // A refused picture is the very thing this test exists to catch, so it
+        // fails wherever it happens rather than looking like a work that simply
+        // does not fit.
+        assert_eq!(
+            summary.images_missing, 0,
+            "an image was refused: a `403` here is exactly what a missing referer looks like"
+        );
+
+        if summary.chapters_fetched <= 1 || summary.images_fetched <= 1 {
+            println!(
+                "note: {} has {} chapter(s) and {} image(s) — trying the next",
+                summary.title, summary.chapters_fetched, summary.images_fetched
+            );
+            continue;
+        }
+
+        chosen = Some((target, dir, summary));
+        break;
+    }
+
+    let Some((target, dir, summary)) = chosen else {
+        println!(
+            "note: no `pixiv` series with illustrations — skipping \
+             (see fixtures.local.example.json)"
+        );
+        return;
+    };
+    let source = wnd_sources::find(&sources, &target).expect("the pixiv adapter handles this");
 
     println!("title:  {}", summary.title);
     println!(
         "images: {} fetched, {} missing",
         summary.images_fetched, summary.images_missing
-    );
-
-    assert!(
-        summary.chapters_fetched > 1,
-        "this work is pinned because it is a series, not a single chapter"
-    );
-    assert_eq!(
-        summary.images_missing, 0,
-        "nothing was refused: a `403` here is exactly what a missing referer looks like"
     );
 
     let novel = NovelDir::at(dir.path());
@@ -83,7 +125,8 @@ fn pixiv_illustrations_are_fetched_stored_and_pointed_at() {
         "a JPEG, as the site serves pictures: {cover}"
     );
 
-    // And the bodies point at files rather than at `i.pximg.net`.
+    // And the bodies point at files rather than at `i.pximg.net`. The fit above
+    // promised more than the cover, so there is at least one picture in the text.
     let mut in_text = 0;
     for meta in &manifest.chapters {
         let chapter = novel.read_chapter(meta.index).unwrap();
@@ -100,8 +143,8 @@ fn pixiv_illustrations_are_fetched_stored_and_pointed_at() {
         }
     }
     assert!(
-        in_text > 1,
-        "this work is pinned because its chapters have illustrations"
+        in_text > 0,
+        "a work chosen for its illustrations has one in the text"
     );
     println!("in-text: {in_text} in {} chapters", manifest.chapters.len());
 

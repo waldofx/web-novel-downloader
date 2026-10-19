@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
+use url::Url;
 use wnd_core::{FetchPolicy, HttpClient};
 
 /// A client using the default fetch policy, for the live tests.
@@ -28,6 +29,70 @@ pub fn local_client() -> HttpClient {
         ..FetchPolicy::default()
     })
     .expect("client")
+}
+
+/// The works this machine is allowed to hit: the gitignored `fixtures.local.json`
+/// at the workspace root. An absent file, an absent site, or an entry that does
+/// not fit yields nothing — a live test skips rather than fails, and says so.
+///
+/// The file is the user's own and never enters the repository; the committed
+/// `fixtures.local.example.json` is only a template. The root is found by walking
+/// up from this crate until a directory holds that example beside a `Cargo.toml`,
+/// rather than counting `../..`, so moving the crate cannot point the tests at
+/// the wrong file. A file that exists but is not JSON is a broken local file,
+/// not an empty one: it panics rather than looking like "nothing configured".
+pub fn targets(site: &str) -> Vec<Url> {
+    let Some(path) = fixtures_file() else {
+        return Vec::new();
+    };
+
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        // Absent is not broken: nothing is configured, so a live test skips.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(error) => panic!("cannot read {}: {error}", path.display()),
+    };
+
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|error| {
+        panic!(
+            "{} is not valid JSON: {error}; it must match fixtures.local.example.json",
+            path.display()
+        )
+    });
+
+    let Some(entries) = value.get(site).and_then(serde_json::Value::as_array) else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| entry.get("url")?.as_str())
+        .filter_map(|raw| Url::parse(raw).ok())
+        .collect()
+}
+
+/// Print, into the output a human running the test sees, that this machine has
+/// nothing configured for `site`.
+pub fn note_no_target(site: &str) {
+    println!(
+        "note: no `{site}` target in fixtures.local.json — skipping \
+         (see fixtures.local.example.json)"
+    );
+}
+
+/// The gitignored fixtures file, if this machine has one.
+///
+/// The committed example beside a `Cargo.toml` marks the workspace root — a
+/// crate directory has a `Cargo.toml` but never the example — so the walk stops
+/// there, whatever a future crate's depth.
+fn fixtures_file() -> Option<std::path::PathBuf> {
+    let mut dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    loop {
+        if dir.join("Cargo.toml").is_file() && dir.join("fixtures.local.example.json").is_file() {
+            let local = dir.join("fixtures.local.json");
+            return local.is_file().then_some(local);
+        }
+        dir = dir.parent()?;
+    }
 }
 
 /// One canned HTTP response.

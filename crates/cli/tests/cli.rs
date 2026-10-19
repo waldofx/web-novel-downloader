@@ -11,6 +11,16 @@ use std::fs;
 
 use common::{TempDir, exported, novel, nvd, stderr, stdout};
 
+/// The manifest the real adapter builds for `url`, without writing anything.
+///
+/// The live tests below need one fact from the site — how many chapters it has,
+/// what an episode's URL is — before they can tell whether they apply at all.
+fn manifest_of(url: &url::Url) -> wnd_core::Manifest {
+    let sources = wnd_sources::registry();
+    let source = wnd_sources::find(&sources, url).expect("an adapter handles this URL");
+    source.novel(&common::client(), url).expect("the work page")
+}
+
 #[test]
 fn info_describes_a_downloaded_directory() {
     let (_guard, novel) = novel("info");
@@ -241,20 +251,34 @@ fn update_help_documents_its_flags_and_its_exit_code() {
 /// The whole pipeline against the real site, and the only test that needs the
 /// network. Run it with `cargo test -p wnd-cli -- --ignored`.
 ///
-/// `n0608gd` has 89 chapters across 8 arcs, which is why it is the reference
-/// novel: two of them is enough to see the meter count, the truncation work, and
-/// the resume on the second run.
+/// Which site is the machine's own choice, from the gitignored
+/// `fixtures.local.json`: two chapters of *any* long work are enough to see the
+/// meter count, the truncation work, and the resume on the second run.
 #[test]
 #[ignore = "needs the network and a live site"]
 fn downloads_a_real_novel_end_to_end() {
-    const URL: &str = "https://ncode.syosetu.com/n0608gd/";
+    // A work with at least two chapters: the meter, the truncation and the
+    // resume below are all two chapters' worth of behaviour.
+    let mut chosen = None;
+    for candidate in common::targets("narou") {
+        let known = manifest_of(&candidate);
+        if known.chapters.len() >= 2 {
+            chosen = Some((candidate, known));
+            break;
+        }
+    }
+    let Some((url, known)) = chosen else {
+        println!("note: no multi-chapter narou work in fixtures.local.json — skipping");
+        return;
+    };
+    let url = url.as_str();
 
     let guard = TempDir::new("live");
     let out = guard.path().join("novel");
 
     let output = nvd(&[
         "download",
-        URL,
+        url,
         "--out",
         out.to_str().unwrap(),
         "--max-chapters",
@@ -289,15 +313,19 @@ fn downloads_a_real_novel_end_to_end() {
         "--max-chapters truncated the index"
     );
     assert_eq!(manifest.chapters[0].index, 1);
-    assert!(
-        manifest.chapters[0].arc.is_some(),
-        "the arc survives the export"
+    assert_eq!(
+        manifest.chapters[0].title, known.chapters[0].title,
+        "the index that was written is the index the adapter built"
+    );
+    assert_eq!(
+        manifest.chapters[0].arc, known.chapters[0].arc,
+        "and the arc survives the export, for a work that has one"
     );
 
     // Running it again must fetch nothing and change nothing.
     let again = nvd(&[
         "download",
-        URL,
+        url,
         "--out",
         out.to_str().unwrap(),
         "--max-chapters",
@@ -315,31 +343,38 @@ fn downloads_a_real_novel_end_to_end() {
 /// actually paste: the **episode page they have open**, not the work page.
 ///
 /// Kakuyomu numbers its episodes nowhere a URL can be derived from, so this also
-/// checks that an episode URL reduces to the work it belongs to.
+/// checks that an episode URL reduces to the work it belongs to. The episode URL
+/// itself comes from the manifest the adapter builds, because Kakuyomu's episode
+/// ids are opaque and cannot be made up.
 #[test]
 #[ignore = "needs the network and a live site"]
 fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
-    const WORK: &str = "https://kakuyomu.jp/works/11054822663954717597";
-    const EPISODE: &str =
-        "https://kakuyomu.jp/works/11054822663954717597/episodes/11054822663955326556";
+    let Some(work) = common::targets("kakuyomu").into_iter().next() else {
+        println!("note: no kakuyomu entry in fixtures.local.json — skipping");
+        return;
+    };
+
+    let known = manifest_of(&work);
+    let episode = known.chapters[0].url.clone();
+    let cap = known.chapters.len().min(2);
 
     let guard = TempDir::new("live-kakuyomu");
     let out = guard.path().join("novel");
 
     let output = nvd(&[
         "download",
-        EPISODE,
+        &episode,
         "--out",
         out.to_str().unwrap(),
         "--max-chapters",
-        "2",
+        &cap.to_string(),
         "--format",
         "txt",
     ]);
 
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
     assert!(
-        stdout(&output).contains("2 fetched, 0 skipped, 2 total"),
+        stdout(&output).contains(&format!("{cap} fetched, 0 skipped, {cap} total")),
         "got:\n{}",
         stdout(&output)
     );
@@ -347,7 +382,8 @@ fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
     let manifest = wnd_core::NovelDir::at(&out).read_manifest().unwrap();
     assert_eq!(manifest.source.id, "kakuyomu");
     assert_eq!(
-        manifest.source.novel_url, WORK,
+        manifest.source.novel_url,
+        work.as_str(),
         "an episode URL resolves to its work, not to itself"
     );
     assert!(manifest.author.is_some());
@@ -364,16 +400,11 @@ fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
     );
     assert_eq!(
         manifest.chapters.len(),
-        2,
+        cap,
         "--max-chapters truncated the index"
     );
 
     let first = &manifest.chapters[0];
-    assert_eq!(first.title, "第1話　勇者、魔王の軍門に下る");
-    assert_eq!(
-        first.arc, None,
-        "this work has no arcs, and none is invented"
-    );
     assert!(
         first
             .published_at
@@ -387,19 +418,27 @@ fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
     assert!(text.lines().count() > 5, "got:\n{text}");
 }
 
-/// `nvd update` against the real site. A single-chapter short story, because the
-/// point is the exit code and the wording, not the volume — and because an
-/// update against a capped download legitimately fetches everything the cap left
-/// behind, which would be 87 chapters here.
+/// `nvd update` against the real site. A single-chapter work, because the point
+/// is the exit code and the wording, not the volume — and because an update after
+/// a capped download legitimately fetches everything the cap left behind.
 #[test]
 #[ignore = "needs the network and a live site"]
 fn updates_a_real_novel_and_then_has_nothing_to_do() {
-    const URL: &str = "https://ncode.syosetu.com/n5589cg/";
+    // The update below follows the index, so a long work would fetch everything
+    // the download left behind. Ask the index which configured work is tiny
+    // before spending a request per chapter on it.
+    let short = common::targets("narou")
+        .into_iter()
+        .find(|url| manifest_of(url).chapters.len() == 1);
+    let Some(url) = short else {
+        println!("note: no single-chapter narou work in fixtures.local.json — skipping");
+        return;
+    };
 
     let guard = TempDir::new("live-update");
     let out = guard.path().join("novel");
 
-    let output = nvd(&["download", URL, "--out", out.to_str().unwrap()]);
+    let output = nvd(&["download", url.as_str(), "--out", out.to_str().unwrap()]);
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
 
     // A directory that is already current exits 3 rather than 0 — the whole
