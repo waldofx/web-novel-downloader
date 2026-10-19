@@ -1,4 +1,4 @@
-//! One chapter page: title and body.
+//! One chapter page: the title, the body, and the author's afterword.
 //!
 //! The title is the site's big-text span just above the body. The header states
 //! the *work's* title in the same shape and comes first, so the first match is
@@ -7,6 +7,12 @@
 //! The body lives in `#honbun` as a run of `<p id="N">` lines, one per
 //! paragraph; a paragraph whose text is only an ideographic space (or empty) is a
 //! blank line, and runs of those are scene breaks via the shared rule.
+//!
+//! The author's 後書き is `#atogaki` — `<br>`-separated lines rather than `<p>`s,
+//! with the site's own toggle link in the `#atogaki_open` element beside it, which
+//! is why the container is selected exactly. A Hameln chapter has **no** 前書き:
+//! no page here carries a container for one, so `pre_note` stays empty for this
+//! site.
 //!
 //! Hameln wraps an illustration in an `<a>` and writes the `alt` on that `<a>`
 //! rather than on the `<img>` — which is not where HTML says it goes, and is

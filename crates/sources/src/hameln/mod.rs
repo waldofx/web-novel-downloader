@@ -34,7 +34,9 @@ selector!(SEL_TITLE, r#"span[itemprop="name"]"#);
 // `chapter`'s question to answer.
 selector!(SEL_TITLE_SPAN, r#"span[style*="font-size:120%"]"#);
 // The author's 後書き. The site's toggle link for it is a *different* element
-// (`#atogaki_open`), so a chapter page has no preface and one afterword.
+// (`#atogaki_open`), so this is selected exactly: a container that covered the
+// link would put the site's words in the author's note. A chapter page carries
+// no container for a 前書き at all.
 selector!(SEL_AFTERWORD, "#atogaki");
 selector!(SEL_AUTHOR, r#"span[itemprop="author"]"#);
 selector!(SEL_TAGS, r#"a[href*="mode=search"]"#);

@@ -42,6 +42,7 @@ version away from coming back, and the next person will search for the *symptom*
 | Symptom | Cause | Fix / workaround |
 | --- | --- | --- |
 | Every Hameln chapter is stored under the **work's** title, and the table of contents the adapter built said otherwise | the work's title is in the page header inside the same `span[style*="font-size:120%"]` a chapter's own title uses, and the header comes first | The chapter's title is the matching span **before** `#honbun` among the body's preceding siblings (`title_of`), with the table-of-contents title as the fallback: a page with no title span then keeps a title that names the chapter, instead of the work (#51) |
+| A Hameln chapter's 後書き never reaches the reader, and nothing warns | the adapter reads `#honbun` and nothing else: `#atogaki` is a *sibling* of the body, holding `<br>`-separated lines rather than the body's `<p id="N">`s | Read `#atogaki` (exactly — the site's toggle link is the `#atogaki_open` element beside it) and split the runs where the `<br>`s fall; the shared blank-run rule then applies unchanged. Hameln has no 前書き. Fixture: `hameln/chapter.html` (#47) |
 | A Hameln illustration downloads without its description | the `alt` is on the **`<a>`** that wraps the picture, not on the `<img>`, which is not where HTML says it goes | Read the `alt` from the picture, and from the link around it when the picture has none. The walk takes the anchor's `alt` for exactly this site (`inline::picture`) |
 
 ## Kakuyomu markup
