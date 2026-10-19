@@ -39,6 +39,8 @@ fn a_hameln_work_is_downloaded_and_its_chapter_parsed() {
     assert_eq!(manifest.content_rating, source.content_rating());
     assert_eq!(manifest.language, "ja");
 
+    // The work's author and tags are its own, and are not pinned here.
+
     // The index is the adapter's own contract, whichever work is configured:
     // one-based, gapless, each chapter its own page under the work.
     assert!(

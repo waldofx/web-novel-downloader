@@ -17,35 +17,68 @@ pub fn client() -> HttpClient {
     HttpClient::new(FetchPolicy::default()).expect("client")
 }
 
-/// The works this machine may hit: the gitignored `fixtures.local.json` at the
-/// repository root, one array per site, each entry `{ "url": …, "note": … }`.
+/// The works this machine is allowed to hit: the gitignored `fixtures.local.json`
+/// at the workspace root. An absent file, an absent site, or an entry that does
+/// not fit yields nothing — a live test skips rather than fails, and says so.
 ///
-/// A live test takes the entries it can use and skips when there are none, so a
-/// fresh clone runs `cargo test --workspace` without ever reaching a site. Until
-/// the file is copied from `fixtures.local.example.json`, every live test
-/// reports that it is skipping, which is the honest answer.
+/// The file is the user's own and never enters the repository; the committed
+/// `fixtures.local.example.json` is only a template. The root is found by walking
+/// up from this crate until a directory holds that example beside a `Cargo.toml`,
+/// rather than counting `../..`, so moving the crate cannot point the tests at
+/// the wrong file. A file that exists but is not JSON is a broken local file,
+/// not an empty one: it panics rather than looking like "nothing configured".
 pub fn targets(site: &str) -> Vec<Url> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures.local.json");
-    let Ok(text) = std::fs::read_to_string(&path) else {
+    let Some(path) = fixtures_file() else {
         return Vec::new();
     };
-    let file: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|error| {
+
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        // Absent is not broken: nothing is configured, so a live test skips.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(error) => panic!("cannot read {}: {error}", path.display()),
+    };
+
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|error| {
         panic!(
-            "{} is not JSON in the shape {} shows: {error}",
-            path.display(),
-            "fixtures.local.example.json"
+            "{} is not valid JSON: {error}; it must match fixtures.local.example.json",
+            path.display()
         )
     });
-    file.get(site)
-        .and_then(serde_json::Value::as_array)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|entry| entry.get("url").and_then(serde_json::Value::as_str))
-                .map(|url| Url::parse(url).unwrap_or_else(|error| panic!("{url}: {error}")))
-                .collect()
-        })
-        .unwrap_or_default()
+
+    let Some(entries) = value.get(site).and_then(serde_json::Value::as_array) else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| entry.get("url")?.as_str())
+        .filter_map(|raw| Url::parse(raw).ok())
+        .collect()
+}
+
+/// Print, into the output a human running the test sees, that this machine has
+/// nothing configured for `site`.
+pub fn note_no_target(site: &str) {
+    println!(
+        "note: no `{site}` target in fixtures.local.json — skipping \
+         (see fixtures.local.example.json)"
+    );
+}
+
+/// The gitignored fixtures file, if this machine has one.
+///
+/// The committed example beside a `Cargo.toml` marks the workspace root — a
+/// crate directory has a `Cargo.toml` but never the example — so the walk stops
+/// there, whatever a future crate's depth.
+fn fixtures_file() -> Option<std::path::PathBuf> {
+    let mut dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    loop {
+        if dir.join("Cargo.toml").is_file() && dir.join("fixtures.local.example.json").is_file() {
+            let local = dir.join("fixtures.local.json");
+            return local.is_file().then_some(local);
+        }
+        dir = dir.parent()?;
+    }
 }
 
 /// A directory that deletes itself when dropped, so a failing assertion cannot

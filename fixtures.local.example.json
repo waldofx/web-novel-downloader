@@ -1,10 +1,10 @@
 {
-  "_comment": "The example for the local, gitignored `fixtures.local.json`. Copy this file to `fixtures.local.json` in the workspace root and put a real work's URL under each site you want to test. Every URL here is an obvious placeholder, not a work: the live tests take the first entry under a site that fits the shape they need and skip, printing a note, when nothing is configured. The real file must never be committed — no work's address, title or prose belongs in the repository.",
+  "_comment": "The example for the local, gitignored `fixtures.local.json`. Copy this file to `fixtures.local.json` in the workspace root and put a real work's URL under each site you want to test. Every URL here is an obvious placeholder, not a work: a live test takes the first entry under a site that fits the shape it needs and skips, printing a note, when nothing is configured. No committed test reads `novel18` or `h_syosetu` — those buckets are for a work you want to fetch by hand. The real file must never be committed: no work's address, title or prose belongs in the repository.",
   "narou": [
     { "url": "https://ncode.syosetu.com/n0000aa/", "note": "a general-audience work; any number of chapters" }
   ],
   "novel18": [
-    { "url": "https://novel18.syosetu.com/n0000dd/", "note": "an adult work on the R18 sibling host" }
+    { "url": "https://novel18.syosetu.com/n0000dd/", "note": "an adult work on the R18 sibling host; no test reads this bucket" }
   ],
   "kakuyomu": [
     { "url": "https://kakuyomu.jp/works/10000000000000000001", "note": "a work; one with more than a hundred episodes also exercises the snapshot regression test" }
@@ -13,7 +13,7 @@
     { "url": "https://syosetu.org/novel/000000/", "note": "a general-audience work" }
   ],
   "h_syosetu": [
-    { "url": "https://h.syosetu.org/novel/000001/", "note": "an adult work on the R18 sibling host" }
+    { "url": "https://h.syosetu.org/novel/000001/", "note": "an adult work on the R18 sibling host; no test reads this bucket" }
   ],
   "pixiv": [
     { "url": "https://www.pixiv.net/novel/show.php?id=10000001", "note": "a work; a series with pictures in its chapters also exercises the download test" }
