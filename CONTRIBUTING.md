@@ -129,4 +129,15 @@ cargo test -p wnd-sources --test kakuyomu_live -- --ignored --nocapture
 - Adult sources download like any other; each site enforces its own age gate. The tool never bypasses age gates, logins, or paywalls.
 - Only text nodes are ever translated; structure and ruby are preserved.
 - The on-disk format is a contract — bump `FORMAT_VERSION` if you change it.
-- Never commit `fixtures.local.json`, `cookies.json`, `.env`, `exports/`, or `raw/`.
+- **Nothing from a real novel goes in this repository.** Not a line of prose, not
+  a title, not an author's name, not a work's address or id. A fixture, a doc
+  example or a test carries a **made-up** example based on the real thing: the
+  site's markup and the site's own vocabulary stay exactly as captured, and the
+  work's own words are replaced with obvious placeholders. The
+  [placeholder fleet](docs/engineering/testing.md#fixtures) is the vocabulary for
+  that, and `cargo test` runs a check (`crates/sources/tests/placeholders.rs`)
+  that every work address in the repository points at a placeholder. The prose
+  half is not greppable, and is what review is for.
+- Never commit `fixtures.local.json`, `cookies.json`, `.env`, `exports/`, `raw/`,
+  or `captures/` — those are where the real works, the raw captures and the
+  generated files belong.

@@ -32,6 +32,11 @@ crates/sources/tests/
 `tests/common/mod.rs` carries `#![allow(dead_code)]`: every test binary compiles
 it, and no single binary uses everything in it.
 
+Each crate keeps its own copy of those helpers: an integration test is a separate
+crate, so it can share a module *within* a crate but not across crates. The one
+that is deliberately identical everywhere is `targets(site)` — where a live test
+gets its work from (below).
+
 ## Fixtures
 
 Captured HTML lives in `tests/fixtures/<site>/` as **files**, not inline strings,
@@ -51,12 +56,45 @@ or when the site could not be reached for a fresh one —
 `hameln/chapter-illustrated.html` was once both, and the comment beside the
 constant said so.
 
-The **shape** is what a fixture is for, not the words in it. A fixture taken
-straight from a capture replaces the author's prose and the real addresses with
-obvious placeholders, and keeps the site's elements, attributes, spacing and
-quirks exactly as captured, because those are what the adapter is tested against.
-Real prose still sits in the older fixtures; #41 carries the placeholders across
-them.
+The same goes for length: a list's *shape* is in its rows, not in how many of them
+a particular work has. `hameln/work.html` carries twelve episodes where the site
+puts a work's whole list on one page, and the assertion that the parser reads
+*every* episode is a fact about the site's markup, not about that row count.
+
+The **shape** is what a fixture is for, not the words in it, and that is a
+two-part rule:
+
+- **The site's half stays exactly as captured**: elements, classes, attributes,
+  spacing, its own UI text (`感想を書く`, `次の話 >>`), its dates, its host names,
+  and the vocabulary the site defines — a genre label, a rating, a tag. Those are
+  what an adapter matches on, and a fixture that "tidies" them tests the adapter
+  against a page that does not exist.
+- **The work's half does not**: a work's title, its author's name, its synopsis
+  and chapter titles, a line of its prose, its ids and its addresses are all
+  replaced. Nothing from a real novel is committed — that is the rule in
+  [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md) — and a
+  **made-up** example is what a fixture, a doc or a test carries instead.
+
+The placeholder fleet, so that a replaced address still reads as one:
+
+| what | what stands in for it |
+| --- | --- |
+| a work title | `見本の作品　～サンプル～` |
+| an author | `見本作者`, `見本の作者` |
+| a chapter title | `第一話　見本の一話` |
+| prose | `本文の一行目の見本です。` |
+| a Narou code | `n0000aa` … `n0000dd` |
+| a Hameln or `h.syosetu` id | `/novel/000000/`, `/novel/000001/` |
+| a Kakuyomu id | `10000000000000000001`, … |
+| a Pixiv id | `show.php?id=10000001`, `series/10000006` |
+| an image | `https://img.example.test/…`, `i.pximg.net/…/00000000_p0.png` |
+| a host that is not a site | `example.test` |
+
+`crates/sources/tests/placeholders.rs` checks the mechanical half of that — every
+work address in the repository points at a placeholder — and `cargo test` runs it
+with everything else. The prose half is not greppable, and is what review is for.
+The raw capture keeps the real words in the gitignored `captures/`, and the works
+a live test runs against live in the gitignored `fixtures.local.json`.
 
 Two traps in a browser-saved capture. It rewrites every asset it loaded to
 `./<page title>_files/…` and leaves the `<a href>` beside it alone, so the `src`
@@ -87,6 +125,14 @@ cargo test -p wnd-download --test pixiv_live   -- --ignored --nocapture
 
 Live tests print what they found (`--nocapture`) so that a failure shows the real
 shape of the page instead of only an assertion.
+
+They also take the works they hit from the **gitignored** `fixtures.local.json` at
+the repository root — copied from `fixtures.local.example.json`, whose URLs are
+all placeholders. A test asks that file for a site, takes the first entry that
+fits the shape it needs (a multi-chapter work, a one-chapter work, a long work),
+and prints what it was looking for before skipping when there is nothing to use.
+No committed test hard-codes a work, so a red live test means the adapter rather
+than a stale id — and a fresh clone runs the whole suite without reaching anyone.
 
 ## The gate
 
@@ -126,7 +172,7 @@ paste the output. "Should work" is not evidence.
 | one job at a time, a poisoned flag not blocking every later job, and a run ending in exactly one `done` or `failed` | `apps/gui/src/lib.rs` | unit tests. The Tauri half of that file is a handful of lines and is not separately tested — see the note below |
 | the front end against the command layer: every command `app.js` invokes is one `generate_handler!` registers, the channel name, and every element id it looks up being in the page | `apps/gui/tests/ui.rs` | reads both sides. A window cannot be clicked by a test, and these are the disagreements that would otherwise arrive as a blank window with an error nobody can see |
 | Narou against the real site | `sources/tests/narou_live.rs` | `#[ignore]`d |
-| Kakuyomu against the real site, including the 1069-episode work | `sources/tests/kakuyomu_live.rs` | `#[ignore]`d |
+| Kakuyomu against the real site, including a long work whose rendered HTML would lie about its size | `sources/tests/kakuyomu_live.rs` | `#[ignore]`d. Which works these are is this machine's own business — `fixtures.local.json` |
 | Pixiv against the real site: a series URL expanding to every chapter it states, and a standalone novel's reader pages arriving whole | `sources/tests/pixiv_live.rs` | `#[ignore]`d. Both tests re-read the API answer the manifest points at and compare *counts* — the two ways this adapter fails quietly are a series cut to one chapter and a chapter cut to one reader page |
 | An illustrated pixiv series, downloaded whole: the cover and the in-text pictures, every hash verified against bytes a real server sent, a second run fetching nothing, and `--check` finding nothing changed | `download/tests/pixiv_live.rs` | `#[ignore]`d. This is the one test that proves the `Referer`, because `i.pximg.net` answers `403` without it and would fail every assertion at once |
 
