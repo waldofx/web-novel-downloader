@@ -147,6 +147,45 @@ cargo fmt --all --check
 If the change touched fetching or an adapter, run the ignored live tests and
 paste the output. "Should work" is not evidence.
 
+## The build cache
+
+`target/` is Cargo's workbench, not the product: compiled dependencies, objects,
+test executables and their symbol files, and an incremental cache. It is
+gitignored, and nothing in it is committed or shipped. It can still eat a disk:
+after a long series of Tauri debug builds and tests this workspace's
+`target/debug` grew to **25.2 GB** — 11.3 GB of `.pdb`, 5.1 GB of duplicated
+`.rlib`, 5.8 GB of incremental sessions and 1.5 GB of test executables — while
+the tracked repository stayed around 1 MB.
+
+The root `Cargo.toml` keeps the debug build modest: line tables rather than full
+DWARF (`debug = 1`), no incremental cache (`incremental = false`), and no debug
+info for dependencies. A full gate with that profile leaves `target/debug` at
+**2.4 GB** (measured 2026-10-20; `target/` was 4.0 GB with a release build also
+present). Stale artifacts still accumulate across dependency changes, so the
+gate ends with:
+
+```bash
+powershell -NoProfile -File scripts/clean-builds.ps1
+```
+
+The script reports the size, does nothing under 3 GB, cleans `target/debug` over
+it, and takes `-All` for a complete `cargo clean`. It refuses to touch a tree
+while `cargo`, `rustc` or the app is running, and it fails the gate if the
+profile above disappears. On macOS/Linux, run it with `pwsh`; `cargo clean
+--profile dev` is the same operation.
+
+A release build for manual testing is the one thing worth keeping, and it is
+small enough to keep outside `target/`:
+
+```bash
+cargo build --release -p wnd-gui
+copy target\release\nvd-app.exe "%LOCALAPPDATA%\Programs\nvd\"
+cargo clean
+```
+
+At this writing the release exe is 15.1 MB and the whole repository, captures
+included, is about 45 MB.
+
 ## What is covered where
 
 | Area | Where | Notes |

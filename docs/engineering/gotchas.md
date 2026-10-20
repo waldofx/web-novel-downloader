@@ -117,6 +117,7 @@ version away from coming back, and the next person will search for the *symptom*
 | A dependency build pulls in a C toolchain, or is far slower to compile than expected | `zip`'s **default features** enable zopfli (optimal but slow), plus lzma, bzip2, zstd and AES | Depend on the slice you need: `zip = { version = "7", default-features = false, features = ["deflate-flate2"] }` — pure Rust, sane speed |
 | Testing the CLI looks like it needs `assert_cmd`/`escargot` | Cargo already tells an integration test where its own binary is | `env!("CARGO_BIN_EXE_nvd")` in `crates/cli/tests/cli.rs`. `Command::output()` also captures raw UTF-8 bytes, which sidesteps the console-encoding trouble described above |
 | A CLI test asserts "non-zero" and gets `2` | `clap` exits `2` for a usage error before your code runs | Assert `2` for a rejected flag or value and `1` for an application failure. Collapsing them into "non-zero" would hide a broken argument definition |
+| The project folder is tens of GB while the tracked repository is about 1 MB | `target/` is Cargo's build cache: every Tauri test binary leaves a `.pdb`, every rebuild left an incremental session, and Cargo never prunes stale rlibs. Debug builds once reached 25.2 GB | `target/` is gitignored and never committed. The dev profile is `debug = 1`, `incremental = false`, dependencies without debug info; the gate ends with `scripts/clean-builds.ps1`, and a release exe worth keeping is copied outside the repository first ([testing.md](testing.md#the-build-cache)) |
 
 ## The desktop app
 
