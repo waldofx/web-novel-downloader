@@ -60,9 +60,11 @@ Both. `cargo run -p wnd-gui` starts a small desktop app over exactly the same
 library: paste the URL, choose a folder, press **Download**, and watch the
 chapters arrive. It writes the same folder `nvd` writes — use either one, on the
 same folder, at different times. The app always respects `robots.txt` and never
-refuses a work because of its rating. It can add and forget sessions too
-(**Manage…** beside the session list), and it cannot cancel a run already
-started. See [the window](app.md).
+refuses a work because of its rating. It can list the works under a folder you
+keep them in, open one's folder, update or export it, and move it to the trash
+without opening a terminal. It can add and forget sessions too (**Manage…**
+beside the session list), and it cannot cancel a run already started. See
+[the window](app.md).
 
 ### Why is it so slow?
 

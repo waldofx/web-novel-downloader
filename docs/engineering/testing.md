@@ -167,7 +167,7 @@ paste the output. "Should work" is not evidence.
 | Pixiv's text notation: `[newpage]` joining, furigana, links, the author's `[chapter:]` headings, uploaded and referenced images, and the markers that stay literal | `sources/src/pixiv/content.rs` | a captured body, block for block |
 | Pixiv URL forms, work expansion, chapter numbering and the URLs a manifest holds | `sources/src/pixiv/mod.rs` | pure functions over the answers above; the work/listing paths themselves are covered by the live tests |
 | the whole pipeline under the real binary: exit codes, which stream output goes to, flags, `--help` | `crates/cli/tests/cli.rs` | runs `nvd` itself, so no library test can cover it. Offline, except one `#[ignore]`d test that downloads two chapters for real |
-| what the window asks the library for — a URL without a scheme, validation before a thread, every response's shape, resume, update, `info`, the session picker and manager (save from a file and from a header, a pasted address reduced to a host, replace, forget, every refusal) — and the report it renders | `apps/gui/tests/job.rs` | an in-memory adapter, a temp directory, no Tauri and no window |
+| what the window asks the library for — a URL without a scheme, validation before a thread, every response's shape, resume, update, `info`, the library (the root and its children, a broken manifest as a row, a plain folder skipped, a missing root, every removal refusal, the platform's opener), the session picker and manager (save from a file and from a header, a pasted address reduced to a host, replace, forget, every refusal) — and the report it renders | `apps/gui/tests/job.rs` | an in-memory adapter, a temp directory, no Tauri and no window |
 | the request JSON exactly as the front end sends it: camelCase keys, the options spread beside the request's own fields, and what is assumed when a field is absent | `apps/gui/src/job.rs` | unit tests; the two files on either side of the IPC have to agree on this shape |
 | one job at a time, a poisoned flag not blocking every later job, and a run ending in exactly one `done` or `failed` | `apps/gui/src/lib.rs` | unit tests. The Tauri half of that file is a handful of lines and is not separately tested — see the note below |
 | the front end against the command layer: every command `app.js` invokes is one `generate_handler!` registers, the channel name, and every element id it looks up being in the page | `apps/gui/tests/ui.rs` | reads both sides. A window cannot be clicked by a test, and these are the disagreements that would otherwise arrive as a blank window with an error nobody can see |
@@ -197,12 +197,13 @@ it again costs an afternoon:
 2. Set `build.frontendDist` in `apps/gui/tauri.conf.json` to `ui-manual`, and
    edit the output folder and the novel URL at the top of the check.
 3. `cargo build -p wnd-gui` and run `target/debug/nvd-app.exe`. The check runs
-   itself: it drives the shipped `onEvent` and `renderSessions` with the payloads
-   a job and the store produce and asserts what the page then shows, then
-   downloads two chapters of a real novel through the real commands, and — from
-   the `done` payload it received — asks for an export. **A `.txt` in the novel's
-   `exports/` means every check passed; a `.md` means one of them failed**, and
-   the export is the only channel out of a window that is not being watched.
+   itself: it drives the shipped `onEvent`, `renderSessions` and `renderLibrary`
+   with the payloads a job and the store produce and asserts what the page then
+   shows, then downloads two chapters of a real novel through the real commands,
+   and — from the `done` payload it received — asks for an export. **A `.txt` in
+   the novel's `exports/` means every check passed; a `.md` means one of them
+   failed**, and the export is the only channel out of a window that is not being
+   watched.
 4. Put `frontendDist` back to `ui` and delete `ui-manual/`. `tests/ui.rs` asserts
    the configuration points at `ui`, so forgetting this fails the gate rather
    than shipping a UI that is not the one the tests read.
@@ -211,5 +212,6 @@ That is what proved, for this change, that the page loads, that `onEvent` render
 the plan, the chapter rows, the counts, the missing picture and the report, that
 `invoke` reaches the command layer and returns something the front end can use,
 and that the event payload the job emits is the payload the front end reads. The
-folder dialog, the session manager's dialog, and a real button click are still
-only as tested as a manual run makes them.
+folder dialog, the session manager's dialog, a library row's **Open**, **Update**,
+**Export** and **Remove** buttons, and a real button click are still only as
+tested as a manual run makes them.
