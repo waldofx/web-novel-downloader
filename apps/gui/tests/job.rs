@@ -437,14 +437,171 @@ fn the_picker_shows_the_sessions_a_store_holds() {
 
     // The shape the picker reads — and no cookie value in it, ever.
     let shape = serde_json::to_value(&listed[0]).expect("a session serializes");
-    assert_eq!(
-        shape,
-        json!({
-            "name": "pixiv",
-            "hosts": ["pixiv.net"],
-            "cookies": 1,
-            "expiresAt": 1_800_000_000_u64
-        })
+    assert_eq!(shape["name"], "pixiv");
+    assert_eq!(shape["hosts"], json!(["pixiv.net"]));
+    assert_eq!(shape["cookies"], 1);
+    assert_eq!(shape["expiresAt"], 1_800_000_000_u64);
+    assert!(
+        shape["savedAt"].as_u64().expect("a saved time") > 0,
+        "the manager says how old a session is"
     );
     assert!(!shape.to_string().contains("hunter2"));
+}
+
+// ------------------------------------------------------------------ sessions
+
+/// A store directory that is not the user's own.
+fn store(dir: &TempDir) -> PathBuf {
+    dir.path().join("sessions")
+}
+
+/// A Netscape export with one cookie for `domain`.
+fn export(domain: &str) -> String {
+    format!("# Netscape HTTP Cookie File\n{domain}\tFALSE\t/\tFALSE\t0\tPHPSESSID\tsecret\n")
+}
+
+#[test]
+fn a_cookies_file_is_saved_as_a_session() {
+    let dir = TempDir::new("session-file");
+    let store = store(&dir);
+    let file = dir.path().join("cookies.txt");
+    std::fs::write(&file, export("example.com")).expect("a cookies file");
+
+    job::save_session_file_in(&store, "example", &file).expect("the session is saved");
+
+    let listed = job::sessions_in(&store).expect("a listing");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].name, "example");
+    assert_eq!(listed[0].hosts, ["example.com"]);
+    assert_eq!(listed[0].cookies, 1);
+}
+
+#[test]
+fn a_cookie_header_is_saved_for_the_site_it_names() {
+    let dir = TempDir::new("session-header");
+    let store = store(&dir);
+
+    job::save_session_header_in(&store, "adult", "novel18.example", "over18=yes; sess=abc")
+        .expect("the session is saved");
+
+    let listed = job::sessions_in(&store).expect("a listing");
+    assert_eq!(listed[0].hosts, ["novel18.example"]);
+    assert_eq!(listed[0].cookies, 2);
+
+    let session = SessionStore::at(&store)
+        .load("adult")
+        .expect("the session is there");
+    assert!(session.covers("novel18.example"));
+    assert!(
+        !session.covers("ncode.example"),
+        "a header names one site only"
+    );
+}
+
+#[test]
+fn a_site_pasted_as_a_url_is_reduced_to_its_host() {
+    let dir = TempDir::new("session-url");
+    let store = store(&dir);
+
+    job::save_session_header_in(
+        &store,
+        "adult",
+        "https://Novel18.Example/story/1/",
+        "over18=yes",
+    )
+    .expect("the site is understood");
+
+    let listed = job::sessions_in(&store).expect("a listing");
+    assert_eq!(
+        listed[0].hosts,
+        ["novel18.example"],
+        "a pasted address is a site"
+    );
+}
+
+#[test]
+fn a_blank_name_is_refused() {
+    let dir = TempDir::new("session-blank");
+    let store = store(&dir);
+
+    let error = job::save_session_header_in(&store, "   ", "example.com", "a=b")
+        .expect_err("a session needs a name");
+    assert!(error.contains("name"), "{error}");
+    assert!(job::sessions_in(&store).expect("a listing").is_empty());
+}
+
+#[test]
+fn an_empty_export_is_refused() {
+    let dir = TempDir::new("session-empty-file");
+    let store = store(&dir);
+    let file = dir.path().join("cookies.txt");
+    std::fs::write(&file, "# Netscape HTTP Cookie File\n").expect("an empty export");
+
+    let error =
+        job::save_session_file_in(&store, "empty", &file).expect_err("no cookies is not a session");
+    assert!(error.contains("no cookies"), "{error}");
+    assert!(job::sessions_in(&store).expect("a listing").is_empty());
+}
+
+#[test]
+fn an_empty_header_is_refused() {
+    let dir = TempDir::new("session-empty-header");
+    let store = store(&dir);
+
+    let error = job::save_session_header_in(&store, "empty", "example.com", " ; ; ")
+        .expect_err("no cookies is not a session");
+    assert!(error.contains("no cookies"), "{error}");
+}
+
+#[test]
+fn a_missing_file_says_which_one() {
+    let dir = TempDir::new("session-missing-file");
+    let store = store(&dir);
+    let file = dir.path().join("there-is-no-cookies.txt");
+
+    let error = job::save_session_file_in(&store, "gone", &file)
+        .expect_err("a file that is not there cannot be read");
+    assert!(error.contains("there-is-no-cookies.txt"), "{error}");
+}
+
+#[test]
+fn saving_the_same_name_replaces_the_session() {
+    let dir = TempDir::new("session-replace");
+    let store = store(&dir);
+
+    job::save_session_header_in(&store, "site", "a.example", "one=1").expect("the first save");
+    job::save_session_header_in(&store, "site", "b.example", "two=2").expect("a refresh");
+
+    let listed = job::sessions_in(&store).expect("a listing");
+    assert_eq!(listed.len(), 1, "a name is one session, not two");
+    assert_eq!(listed[0].hosts, ["b.example"]);
+    assert_eq!(listed[0].cookies, 1);
+}
+
+#[test]
+fn forgetting_a_session_removes_it() {
+    let dir = TempDir::new("session-forget");
+    let store = store(&dir);
+    job::save_session_header_in(&store, "site", "example.com", "a=b").expect("a saved session");
+
+    job::forget_session_in(&store, "site").expect("it is forgotten");
+    assert!(job::sessions_in(&store).expect("a listing").is_empty());
+
+    let error = job::forget_session_in(&store, "site").expect_err("it is already gone");
+    assert!(error.contains("site"), "{error}");
+}
+
+#[test]
+fn a_broken_export_does_not_echo_a_cookie_value() {
+    let dir = TempDir::new("session-broken");
+    let store = store(&dir);
+    let file = dir.path().join("cookies.txt");
+    std::fs::write(&file, "not a cookie line, hunter2\n").expect("a broken export");
+
+    let error =
+        job::save_session_file_in(&store, "broken", &file).expect_err("a broken export is refused");
+    assert!(
+        !error.contains("hunter2"),
+        "a value must not travel in an error: {error}"
+    );
 }

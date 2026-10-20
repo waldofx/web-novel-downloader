@@ -53,14 +53,18 @@
 
         <div class="field">
           <label for="session">Session</label>
-          <select id="session">
-            <option value="">none</option>
-          </select>
+          <div class="row">
+            <select id="session">
+              <option value="">none</option>
+            </select>
+            <button type="button" id="manage-sessions" class="quiet">
+              Manage…
+            </button>
+          </div>
         </div>
         <p class="hint">
-          For a site that asks for a cookie. Make one with
-          <code>nvd session save</code>; it is never read by anything but the
-          hosts it names.
+          For a site that asks for a cookie. A session is only sent to the sites
+          it names, and its contents are never shown again after you save it.
         </p>
 
         <div class="field">
@@ -128,5 +132,71 @@
         <div id="summary"></div>
       </section>
     </main>
+
+    <dialog id="sessions-dialog" aria-labelledby="sessions-title">
+      <h2 id="sessions-title">Sessions</h2>
+      <p class="hint">
+        A session is a cookie jar you exported from your own browser. It is a
+        credential: this panel shows what it holds, never the values.
+      </p>
+
+      <ul id="session-list"></ul>
+      <p id="sessions-status" class="hint" role="status"></p>
+
+      <h3>Add from a cookies file</h3>
+      <p class="hint">
+        The <code>cookies.txt</code> a browser export extension writes. Saving
+        an existing name again replaces it — that is how you refresh one.
+      </p>
+      <label for="session-name">Name</label>
+      <input
+        id="session-name"
+        type="text"
+        placeholder="pixiv"
+        spellcheck="false"
+      />
+      <label for="session-file">File</label>
+      <div class="row">
+        <input
+          id="session-file"
+          type="text"
+          placeholder="choose a cookies.txt…"
+          spellcheck="false"
+        />
+        <button type="button" id="session-browse" class="quiet">Choose…</button>
+      </div>
+      <div class="buttons">
+        <button type="button" id="session-save-file">Save session</button>
+      </div>
+
+      <details>
+        <summary>Or paste a <code>Cookie</code> header</summary>
+        <p class="hint">
+          Copied from the browser's developer tools, for one site. It uses the
+          name above.
+        </p>
+        <label for="session-host">Site</label>
+        <input
+          id="session-host"
+          type="text"
+          placeholder="novel18.syosetu.com"
+          spellcheck="false"
+        />
+        <label for="session-header">Header</label>
+        <textarea
+          id="session-header"
+          rows="3"
+          spellcheck="false"
+          placeholder="name=value; name2=value2"
+        ></textarea>
+        <div class="buttons">
+          <button type="button" id="session-save-header">Save session</button>
+        </div>
+      </details>
+
+      <div class="buttons">
+        <button type="button" id="sessions-close">Close</button>
+      </div>
+    </dialog>
   </body>
 </html>

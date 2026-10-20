@@ -145,6 +145,24 @@ fn sessions() -> Result<Vec<job::SessionInfo>, String> {
     job::sessions()
 }
 
+/// Save a session from a `cookies.txt` the user exported.
+#[tauri::command]
+fn save_session_file(name: String, file: String) -> Result<(), String> {
+    job::save_session_file(&name, Path::new(&file))
+}
+
+/// Save a session from a raw `Cookie:` header, for the one site it names.
+#[tauri::command]
+fn save_session_header(name: String, host: String, header: String) -> Result<(), String> {
+    job::save_session_header(&name, &host, &header)
+}
+
+/// Forget a saved session.
+#[tauri::command]
+fn forget_session(name: String) -> Result<(), String> {
+    job::forget_session(&name)
+}
+
 /// What is running, if anything.
 ///
 /// A window that has just loaded asks: a job started before a reload is still
@@ -173,13 +191,33 @@ async fn pick_directory(window: tauri::Window) -> Option<String> {
     .flatten()
 }
 
+/// The native "choose a cookies file" dialog, the sibling of the folder one.
+#[tauri::command]
+async fn pick_cookies_file(window: tauri::Window) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        rfd::FileDialog::new()
+            .set_title("Choose a cookies file")
+            .add_filter("Cookies", &["txt"])
+            .set_parent(&window)
+            .pick_file()
+            .map(|file| file.display().to_string())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 /// Start the window.
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             pick_directory,
+            pick_cookies_file,
             sessions,
+            save_session_file,
+            save_session_header,
+            forget_session,
             status,
             download,
             update,
