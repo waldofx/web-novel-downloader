@@ -22,7 +22,13 @@ The full conventions live in **[CONTRIBUTING.md](CONTRIBUTING.md)**. The short f
    cargo test --workspace
    cargo clippy --workspace --all-targets -- -D warnings
    cargo fmt --all --check
+   powershell -NoProfile -File scripts/clean-builds.ps1
    ```
+
+   The last line keeps `target/` bounded: it cleans the debug profile only when
+   the cache passes 3 GB. `target/` is generated, never committed; a release exe
+   for manual testing is copied outside it first. See
+   [testing.md](docs/engineering/testing.md#the-build-cache).
 
 Global OpenCode skills carry the portable version of these conventions:
 `git-workflow`, `test-first`, and `docs`. Load them when a task matches.

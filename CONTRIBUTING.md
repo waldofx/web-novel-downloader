@@ -101,7 +101,19 @@ cargo build
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
+powershell -NoProfile -File scripts/clean-builds.ps1
 ```
+
+`--all-targets` matters: without it, warnings in test code are missed.
+
+`target/` is generated, and a debug build of this workspace can grow to tens of
+GB if stale PDBs, duplicate rlibs and incremental sessions are left to
+accumulate. The root `Cargo.toml` keeps it small (`debug = 1`,
+`incremental = false`, no debug info for dependencies); the script above cleans
+the debug profile when it passes 3 GB, and `-All` removes everything. For a
+build worth keeping, use `cargo build --release -p wnd-gui` and copy
+`target\release\nvd-app.exe` outside the repository before cleaning. See
+[testing.md](docs/engineering/testing.md#the-build-cache).
 
 `cargo` lives at `%USERPROFILE%\.cargo\bin\cargo.exe` on Windows if it is not on
 `PATH`. If the change touched fetching or a source adapter, also run the ignored
