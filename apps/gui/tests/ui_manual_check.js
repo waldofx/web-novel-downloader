@@ -43,11 +43,32 @@
     "url", "dir", "browse", "session", "max", "force", "check", "epub", "txt",
     "md", "ruby", "notes", "form", "download", "update", "export", "describe",
     "output-title", "counts", "details", "facts", "chapters", "summary",
+    "manage-sessions", "sessions-dialog", "session-list", "sessions-status",
+    "session-name", "session-file", "session-browse", "session-save-file",
+    "session-host", "session-header", "session-save-header", "sessions-close",
   ];
   const missing = wanted.filter((id) => el(id) === null);
   check(`no element is missing from the page (${missing.join(",") || "none"})`, missing.length === 0);
 
-  // 2. The render path, driven with the payloads a job emits.
+  // 2. The session manager: summaries in the list, and nothing else.
+  sessionList = [
+    {
+      name: "demo",
+      hosts: ["example.com"],
+      cookies: 2,
+      savedAt: Math.floor(Date.now() / 1000),
+      expiresAt: null,
+    },
+  ];
+  renderSessions();
+  const listed = el("session-list").children;
+  check("the manager lists a session", listed.length === 1);
+  check(
+    "the manager names its site and its cookies",
+    listed[0].textContent.includes("example.com") && listed[0].textContent.includes("2 cookies"),
+  );
+
+  // 3. The render path, driven with the payloads a job emits.
   handler({ kind: "planned", title: "自", chapters: 11, toFetch: 11 });
   check("planned names the novel", el("output-title").textContent === "自");
 
@@ -90,7 +111,7 @@
   check("an adult work is said to be one", summary.includes("adult"));
   check("the buttons come back", el("download").disabled === false);
 
-  // 3. The real thing: a real novel, through the real commands, on the real
+  // 4. The real thing: a real novel, through the real commands, on the real
   //    channel — and then an export decided by the payload the job sent.
   const finished = new Promise((resolve, reject) => {
     listen(channel, (event) => {

@@ -22,6 +22,8 @@ let running = false;
 /** Chapter index -> its row in the live list. */
 let rows = new Map();
 let counts = { fetched: 0, skipped: 0, checked: 0, images: 0, missing: 0, bytes: 0 };
+/** The saved sessions, as the picker and the manager need them. */
+let sessionList = [];
 
 // ---------------------------------------------------------------- formatting
 
@@ -357,24 +359,171 @@ el("describe").addEventListener("click", async () => {
   }
 });
 
-/** The saved sessions, for the picker. Failure is not worth a dialog. */
+// ------------------------------------------------------------------ sessions
+
+/** How long ago a session was saved, in words. */
+function age(seconds) {
+  const minutes = Math.floor((Date.now() - Number(seconds) * 1000) / 60000);
+  if (!Number.isFinite(minutes) || minutes < 0) return "unknown";
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
+
+/** When a session stops being sent, in words. */
+function expiry(seconds) {
+  if (seconds === null || seconds === undefined) return "no expiry";
+  const at = Number(seconds) * 1000;
+  if (at <= Date.now()) return "expired";
+  return `expires ${new Date(at).toLocaleDateString()}`;
+}
+
+function sessionStatus(text, kind) {
+  const line = el("sessions-status");
+  line.textContent = text;
+  line.className = kind || "hint";
+}
+
+function fillPicker() {
+  const select = el("session");
+  const chosen = select.value;
+  select.replaceChildren(node("option", null, "none"));
+  select.firstChild.value = "";
+  for (const session of sessionList) {
+    const option = node("option", null, `${session.name} (${session.hosts.join(", ")})`);
+    option.value = session.name;
+    select.append(option);
+  }
+  if (chosen && sessionList.some((session) => session.name === chosen)) select.value = chosen;
+}
+
+/** Forget is a two-step button: no native modal, and the name is in the question. */
+function sessionActions(session) {
+  const actions = node("div", "actions");
+  const forget = node("button", "quiet", "Forget");
+  forget.type = "button";
+  forget.addEventListener("click", () => {
+    actions.replaceChildren();
+    const sure = node("button", null, `Forget “${session.name}”?`);
+    sure.type = "button";
+    sure.addEventListener("click", async () => {
+      try {
+        await invoke("forget_session", { name: session.name });
+        await refreshSessions();
+        sessionStatus(`Forgot the “${session.name}” session.`, "ok");
+      } catch (error) {
+        sessionStatus(String(error), "error");
+      }
+    });
+    const keep = node("button", "quiet", "Keep");
+    keep.type = "button";
+    keep.addEventListener("click", () => actions.replaceChildren(forget));
+    actions.append(sure, keep);
+  });
+  actions.append(forget);
+  return actions;
+}
+
+function renderSessions() {
+  const list = el("session-list");
+  list.replaceChildren();
+  if (!sessionList.length) {
+    list.append(node("li", "empty", "No sessions yet. Add one below."));
+    return;
+  }
+  for (const session of sessionList) {
+    const item = node("li");
+    item.append(node("span", "name", session.name));
+    item.append(
+      node(
+        "div",
+        "meta",
+        `${session.hosts.length ? session.hosts.join(", ") : "no site"} · ` +
+          `${session.cookies} cookie${session.cookies === 1 ? "" : "s"} · ` +
+          `saved ${age(session.savedAt)} · ${expiry(session.expiresAt)}`,
+      ),
+    );
+    item.append(sessionActions(session));
+    list.append(item);
+  }
+}
+
+/** Read the store, and show it in both the picker and the manager. */
+async function refreshSessions() {
+  sessionList = await invoke("sessions");
+  fillPicker();
+  renderSessions();
+}
+
+/** The same, for startup, where a failure is worth no more than a warning. */
 async function loadSessions() {
   try {
-    const list = await invoke("sessions");
-    const select = el("session");
-    const chosen = select.value;
-    select.replaceChildren(node("option", null, "none"));
-    select.firstChild.value = "";
-    for (const session of list) {
-      const option = node("option", null, `${session.name} (${session.hosts.join(", ")})`);
-      option.value = session.name;
-      select.append(option);
-    }
-    if (chosen && list.some((session) => session.name === chosen)) select.value = chosen;
+    await refreshSessions();
   } catch (error) {
     console.warn("could not list sessions", error);
   }
 }
+
+/** Choose the session just saved, if the store kept it. */
+function chooseSession(name) {
+  if (sessionList.some((session) => session.name === name)) el("session").value = name;
+}
+
+el("manage-sessions").addEventListener("click", async () => {
+  sessionStatus("");
+  try {
+    await refreshSessions();
+  } catch (error) {
+    sessionStatus(String(error), "error");
+  }
+  const dialog = el("sessions-dialog");
+  if (!dialog.open) dialog.showModal();
+});
+
+el("sessions-close").addEventListener("click", () => el("sessions-dialog").close());
+
+el("session-browse").addEventListener("click", async () => {
+  const file = await invoke("pick_cookies_file");
+  if (file) el("session-file").value = file;
+});
+
+el("session-save-file").addEventListener("click", async () => {
+  const name = el("session-name").value.trim();
+  const file = el("session-file").value.trim();
+  if (!file) {
+    sessionStatus("Choose a cookies.txt first.", "error");
+    return;
+  }
+  try {
+    await invoke("save_session_file", { name, file });
+    el("session-name").value = "";
+    el("session-file").value = "";
+    await refreshSessions();
+    chooseSession(name);
+    sessionStatus(`Saved the “${name}” session.`, "ok");
+  } catch (error) {
+    sessionStatus(String(error), "error");
+  }
+});
+
+el("session-save-header").addEventListener("click", async () => {
+  const name = el("session-name").value.trim();
+  const host = el("session-host").value.trim();
+  try {
+    await invoke("save_session_header", { name, host, header: el("session-header").value });
+    // The header is a credential; do not leave it on the screen.
+    el("session-header").value = "";
+    el("session-host").value = "";
+    el("session-name").value = "";
+    await refreshSessions();
+    chooseSession(name);
+    sessionStatus(`Saved the “${name}” session.`, "ok");
+  } catch (error) {
+    sessionStatus(String(error), "error");
+  }
+});
 
 async function main() {
   await listen(EVENT, (event) => onEvent(event.payload));

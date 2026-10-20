@@ -15,7 +15,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use url::Url;
-use wnd_core::session::{Session, SessionStore, default_dir as default_session_dir};
+use wnd_core::session::cookie::Cookie;
+use wnd_core::session::{Session, SessionStore, default_dir as default_session_dir, netscape};
 use wnd_core::store::model::ContentRating;
 use wnd_core::{FetchPolicy, HttpClient, NovelDir};
 use wnd_download::{DownloadOptions, Progress, UpdateOptions};
@@ -262,6 +263,8 @@ pub struct SessionInfo {
     pub name: String,
     pub hosts: Vec<String>,
     pub cookies: usize,
+    /// Unix seconds.
+    pub saved_at: u64,
     /// Unix seconds, or `None` when nothing in the session expires.
     pub expires_at: Option<u64>,
 }
@@ -325,6 +328,7 @@ fn session_info(summary: &wnd_core::session::SessionSummary) -> SessionInfo {
         name: summary.name.clone(),
         hosts: summary.hosts.clone(),
         cookies: summary.cookies,
+        saved_at: summary.saved_at,
         expires_at: summary.expires_at,
     }
 }
@@ -334,6 +338,96 @@ pub fn load_session(name: &str) -> Result<Session, String> {
     SessionStore::at(session_dir()?)
         .load(name)
         .map_err(|error| error.to_string())
+}
+
+/// Save a session from a browser's `cookies.txt`, as `nvd session save` does.
+///
+/// A name that is already there is replaced: that is the refresh gesture, and
+/// the commonest reason to come back to this panel.
+pub fn save_session_file(name: &str, file: &Path) -> Result<(), String> {
+    save_session_file_in(&session_dir()?, name, file)
+}
+
+/// The same, against a store directory a test can own.
+pub fn save_session_file_in(dir: &Path, name: &str, file: &Path) -> Result<(), String> {
+    let text = std::fs::read_to_string(file)
+        .map_err(|error| format!("could not read {}: {error}", file.display()))?;
+    let cookies = netscape::parse(&text)
+        .map_err(|error| format!("could not read {}: {error}", file.display()))?;
+    if cookies.is_empty() {
+        return Err(format!("{} holds no cookies", file.display()));
+    }
+    save_cookies(dir, name, cookies)
+}
+
+/// Save a session from a raw `Cookie:` header, for the one site it names.
+///
+/// The site may be pasted as an address — `https://novel18.syosetu.com/…` is
+/// what a person has on the clipboard — but a cookie domain has to be a host,
+/// so only the host is kept.
+pub fn save_session_header(name: &str, host: &str, header: &str) -> Result<(), String> {
+    save_session_header_in(&session_dir()?, name, host, header)
+}
+
+/// The same, against a store directory a test can own.
+pub fn save_session_header_in(
+    dir: &Path,
+    name: &str,
+    host: &str,
+    header: &str,
+) -> Result<(), String> {
+    let host = host_from_input(host)?;
+    let cookies = netscape::parse_cookie_header(header, &host);
+    if cookies.is_empty() {
+        return Err("the cookie header holds no cookies".to_string());
+    }
+    save_cookies(dir, name, cookies)
+}
+
+/// Forget a saved session.
+pub fn forget_session(name: &str) -> Result<(), String> {
+    forget_session_in(&session_dir()?, name)
+}
+
+/// The same, against a store directory a test can own.
+pub fn forget_session_in(dir: &Path, name: &str) -> Result<(), String> {
+    SessionStore::at(dir)
+        .delete(name)
+        .map_err(|error| error.to_string())
+}
+
+/// Write a jar under a name, whichever way it arrived.
+fn save_cookies(dir: &Path, name: &str, cookies: Vec<Cookie>) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("give the session a name".to_string());
+    }
+    let session = Session::from_cookies(name, cookies);
+    SessionStore::at(dir)
+        .save(&session)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+/// The host in what a person typed: a host, or the address they copied.
+fn host_from_input(text: &str) -> Result<String, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Err("the cookies need a site: paste its address".to_string());
+    }
+    let host = match Url::parse(text) {
+        Ok(url) => url.host_str().map(str::to_string),
+        Err(url::ParseError::RelativeUrlWithoutBase) => {
+            // `novel18.syosetu.com/` and `novel18.syosetu.com` are one site.
+            let host = text.split('/').next().unwrap_or(text);
+            (!host.is_empty()).then(|| host.to_string())
+        }
+        Err(error) => return Err(format!("`{text}` is not a site: {error}")),
+    };
+    match host {
+        Some(host) if !host.is_empty() => Ok(host.to_ascii_lowercase()),
+        _ => Err(format!("`{text}` has no site name")),
+    }
 }
 
 /// A URL typed by a person, which may be missing its scheme.
