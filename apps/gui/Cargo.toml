@@ -22,6 +22,7 @@ serde_json = { workspace = true }
 url = { workspace = true }
 tauri = { workspace = true }
 rfd = { workspace = true }
+trash = "5.2.9"
 
 [build-dependencies]
 tauri-build = { workspace = true }

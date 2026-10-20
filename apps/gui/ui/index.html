@@ -17,6 +17,34 @@
     </header>
 
     <main>
+      <section class="panel" id="library">
+        <h2>Library</h2>
+        <p class="hint">
+          A folder that holds your novels, one folder per work — the folders the
+          downloader writes. This lists the folder itself and its direct
+          children, each recognised by its <code>manifest.json</code>. Update
+          and Export use the session and formats chosen below.
+        </p>
+        <div class="row">
+          <input
+            id="library-dir"
+            type="text"
+            aria-label="Library folder"
+            placeholder="choose a folder to browse…"
+            spellcheck="false"
+          />
+          <button type="button" id="library-browse" class="quiet">
+            Choose…
+          </button>
+          <button type="button" id="library-refresh">Refresh</button>
+          <button type="button" id="library-use-save" class="quiet">
+            Use the save folder
+          </button>
+        </div>
+        <p id="library-status" class="hint" role="status"></p>
+        <ul id="library-list"></ul>
+      </section>
+
       <form class="panel" id="form" autocomplete="off">
         <h2>The novel</h2>
 

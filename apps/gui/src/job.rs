@@ -269,6 +269,25 @@ pub struct SessionInfo {
     pub expires_at: Option<u64>,
 }
 
+/// One work in a library folder, as the window lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryItem {
+    pub title: String,
+    pub author: Option<String>,
+    pub chapters: usize,
+    pub images: usize,
+    /// `None` when the manifest could not be read.
+    pub rating: Option<ContentRating>,
+    /// RFC 3339 from the manifest, when it says.
+    pub fetched_at: Option<String>,
+    pub output_dir: String,
+    /// The root itself is never removable: it is the library.
+    pub removable: bool,
+    /// Why the manifest could not be read; the row is still shown.
+    pub problem: Option<String>,
+}
+
 /// A request that has been checked over, with the strings turned into types.
 ///
 /// Both entry points below start here, so an unsupported URL or a directory with
@@ -736,6 +755,137 @@ pub fn info(dir: &Path) -> Result<NovelInfo, String> {
         images_missing,
         output_dir: novel.root().display().to_string(),
     })
+}
+
+/// Read the novels a folder holds: the folder itself, and its direct children.
+///
+/// A novel is a folder with a `manifest.json`. One whose manifest cannot be read
+/// is still listed, with the problem, so it can be opened and removed rather
+/// than silently hidden. Nothing below the direct children is read: a library
+/// is a shelf, not a walk of the disk.
+pub fn library(root: &Path) -> Result<Vec<LibraryItem>, String> {
+    if root.as_os_str().is_empty() {
+        return Err("choose a folder to list".to_string());
+    }
+    let metadata =
+        std::fs::metadata(root).map_err(|error| format!("{}: {error}", root.display()))?;
+    if !metadata.is_dir() {
+        return Err(format!("{} is not a folder", root.display()));
+    }
+
+    let mut items = Vec::new();
+    if root.join("manifest.json").is_file() {
+        items.push(library_item(root, false));
+    }
+    let entries = std::fs::read_dir(root)
+        .map_err(|error| format!("could not read {}: {error}", root.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("could not read {}: {error}", root.display()))?;
+        let path = entry.path();
+        if path.is_dir() && path.join("manifest.json").is_file() {
+            items.push(library_item(&path, true));
+        }
+    }
+
+    items.sort_by(|left, right| {
+        left.title
+            .to_lowercase()
+            .cmp(&right.title.to_lowercase())
+            .then_with(|| left.output_dir.cmp(&right.output_dir))
+    });
+    Ok(items)
+}
+
+/// One row, read from its manifest; a broken manifest is the row's problem.
+fn library_item(dir: &Path, removable: bool) -> LibraryItem {
+    let folder = dir
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| dir.display().to_string());
+
+    match NovelDir::at(dir).read_manifest() {
+        Ok(manifest) => LibraryItem {
+            title: manifest.title,
+            author: manifest.author,
+            chapters: manifest.chapters.len(),
+            images: manifest.images.len(),
+            rating: Some(manifest.content_rating),
+            fetched_at: manifest.fetched_at,
+            output_dir: dir.display().to_string(),
+            removable,
+            problem: None,
+        },
+        Err(error) => LibraryItem {
+            title: folder,
+            author: None,
+            chapters: 0,
+            images: 0,
+            rating: None,
+            fetched_at: None,
+            output_dir: dir.display().to_string(),
+            removable,
+            problem: Some(error.to_string()),
+        },
+    }
+}
+
+/// The folder a removal would take, if it is a novel and really is in `root`.
+///
+/// The check is the whole safety of Remove: only a direct child of the library
+/// folder, only a folder with a manifest, and never the library folder itself.
+/// It is a separate step so that the decision can be tested without moving
+/// anything to the trash.
+pub fn removal_target(root: &Path, novel: &Path) -> Result<PathBuf, String> {
+    let root_canonical =
+        std::fs::canonicalize(root).map_err(|error| format!("{}: {error}", root.display()))?;
+    if !root_canonical.is_dir() {
+        return Err(format!("{} is not a folder", root.display()));
+    }
+    let novel_canonical =
+        std::fs::canonicalize(novel).map_err(|error| format!("{}: {error}", novel.display()))?;
+
+    if novel_canonical == root_canonical {
+        return Err("that is the library folder itself, not a novel in it".to_string());
+    }
+    if novel_canonical.parent() != Some(root_canonical.as_path()) {
+        return Err(format!(
+            "{} is not directly inside {}",
+            novel.display(),
+            root.display()
+        ));
+    }
+    if !novel_canonical.join("manifest.json").is_file() {
+        return Err(format!(
+            "{} has no manifest.json, so it is not a novel",
+            novel.display()
+        ));
+    }
+
+    // The caller's own path, not the canonical one: it is the path the window
+    // shows, and on Windows the canonical form carries a `\\?\` prefix the
+    // trash does not need to be given.
+    Ok(novel.to_path_buf())
+}
+
+/// The program and arguments that open `path` with the desktop's own tools.
+///
+/// The window never decides what an OS is called; it asks here. A folder opens
+/// in the file manager and a file in its default application, because that is
+/// what each of these programs does with a path.
+pub fn open_command(path: &Path) -> Result<(String, Vec<String>), String> {
+    if !path.exists() {
+        return Err(format!("{} is not there", path.display()));
+    }
+    let target = path.display().to_string();
+
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let program = "xdg-open";
+
+    Ok((program.to_string(), vec![target]))
 }
 
 struct Counts {
