@@ -22,14 +22,18 @@ drift. Anything in `exports/` can be deleted and rebuilt.
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n0000aa/" },
   "title": "…",
   "author": "…",
   "language": "ja",
   "content_rating": "general",
   "tags": ["…"],
-  "synopsis": "…",
+  "synopsis": [
+    { "type": "paragraph", "children": [ { "type": "text", "value": "…" } ] },
+    { "type": "image", "src": "images/synopsis-1.png", "alt": "…" },
+    { "type": "paragraph", "children": [ { "type": "text", "value": "…" } ] }
+  ],
   "cover": "images/cover.jpg",
   "cover_url": "https://…",
   "fetched_at": "2026-10-17T00:00:00Z",
@@ -60,10 +64,29 @@ drift. Anything in `exports/` can be deleted and rebuilt.
 **Optional fields are omitted, never null.** `arc`, `published_at`, `revised_at`,
 `author`, `synopsis`, `tags`, `cover`, `cover_url` and `images` are absent when the
 site does not expose them, or — for `images` — when nothing has been fetched yet.
-`hash` is absent until the chapter has been downloaded at least once — an adapter
-cannot know a chapter's hash before fetching it, so the field is `Option<String>`
-in the model and skipped when `None`. `images` is the same kind of addition: an
-older directory reads fine, because a missing list is an empty one.
+`synopsis` is absent when the work has none at all; an empty list and no list say
+the same thing. `hash` is absent until the chapter has been downloaded at least
+once — an adapter cannot know a chapter's hash before fetching it, so the field is
+`Option<String>` in the model and skipped when `None`. `images` is the same kind of
+addition: an older directory reads fine, because a missing list is an empty one.
+
+### The synopsis is blocks, not text
+
+A synopsis is the author's description of the work, and on Hameln the author puts
+their illustrations **among its lines**. A string has nowhere to keep a picture,
+so the field holds the same block list a chapter's body does, and a picture is a
+`Block::Image` in the place the author gave it.
+
+Sites that state a synopsis as text — Narou's summary, Kakuyomu's introduction,
+Pixiv's description — hand the model one paragraph per line (`Block::paragraphs`).
+A blank line in that text was the site's paragraph separator; the model's
+paragraph already separates, so it disappears. Only ASCII padding is trimmed:
+U+3000 is the indent, and that is content.
+
+A **version-1** manifest holds a string here. It still opens, and the string is
+read the same way — one paragraph per line — which is why the version bump strands
+no directory. That is also why the field accepts both shapes on the way in
+(`synopsis_blocks` in `model.rs`) and writes only the block form.
 
 ### A URL is not a path
 
@@ -71,16 +94,18 @@ Two fields name a picture, and they are deliberately not the same kind of thing:
 
 - `cover_url`, and a body image's `src` **as an adapter produces it**, are *where
   the source says the picture is*. An adapter can find an image; it cannot store
-  one.
-- `cover`, and the `src` a *stored* chapter holds, are a **path inside the novel
-  directory**. Only the fetcher can put bytes on disk.
+  one. The same holds for a picture inside the synopsis, which an adapter leaves
+  as the URL the work page stated.
+- `cover`, and the `src` a *stored* chapter or synopsis holds, are a **path inside
+  the novel directory**. Only the fetcher can put bytes on disk.
 
 `nvd download` is what turns one into the other: it fetches the cover into
-`images/cover.<ext>` and sets `cover`, and it fetches each body image into
+`images/cover.<ext>` and sets `cover`, fetches each body image into
 `images/<chapter>-<n>.<ext>` and rewrites that chapter's `src` before the chapter
-is written. An image that could not be fetched keeps its URL rather than being
-dropped — a renderer falls back to the alt text, nothing about it is lost, and a
-later run can try again.
+is written, and fetches each synopsis picture into `images/synopsis-<n>.<ext>` and
+rewrites the manifest's synopsis before writing it back. An image that could not be
+fetched keeps its URL rather than being dropped — a renderer falls back to the alt
+text, nothing about it is lost, and a later run can try again.
 
 ### What is in `images/`
 
@@ -93,7 +118,9 @@ after the fact.
 counting the chapter's *distinct* images from one. `images/0007-2.png` is the
 second picture of chapter seven and can be read without opening anything — and a
 name survives the prose around it growing, which counting blocks or lines would
-not.
+not. A synopsis picture is `images/synopsis-<n>.<ext>`, counting the work's
+distinct synopsis pictures from one: not zero-padded, because a synopsis has a
+handful of pictures rather than a thousand.
 
 **The extension is the media type the server stated.** It is what a reader
 afterwards uses to decide how to open the file — the EPUB's own manifest declares
@@ -134,6 +161,11 @@ additive optional field arrive without stranding every directory already on disk
 whereas bumping for one would make `nvd update` unable to read the very
 directories it exists to update.
 
+It is **2** since the synopsis became blocks. The bump is the honest label for "a
+version-1 reader would see an array where it expects a string", even though this
+build reads both; a reader written against version 1 has no rule for the new
+shape.
+
 ## Chapter JSON
 
 A deliberately small document model — not raw HTML — so the translation stage
@@ -141,7 +173,7 @@ can walk the tree, replace each **text** node, and leave structure untouched:
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "index": 1,
   "title": "…",
   "nodes": [
@@ -189,6 +221,9 @@ lose data to tidy itself up.
 `pre_note` (`前書き`) and `post_note` (`後書き`) are their own arrays so they can
 be kept, hidden, or translated independently of the story.
 
+The synopsis follows the same idea one level up: it belongs to the work, not to a
+chapter, so it lives on the manifest as blocks and not as text (see above).
+
 ### Blank lines are normalized, not preserved verbatim
 
 Sites use empty lines for both spacing and scene changes, so the run length is
@@ -224,7 +259,10 @@ what makes resume and update cheap:
 
 - Write `manifest.json` **immediately after the table of contents is parsed**,
   then rewrite it after each chapter. An interrupted run leaves a valid,
-  resumable directory rather than a half-written lie.
+  resumable directory rather than a half-written lie. The synopsis is rewritten
+  from URLs to paths in the same breath — before the first chapter — and the
+  manifest is written back afterwards even when nothing was fetched, so a run
+  whose chapters are all skipped still leaves a synopsis an export can follow.
 - On the next run, **skip** a chapter only when all three hold: the stored
   manifest has a hash for that index, the file reads back, and hashing the parsed
   content reproduces that hash. Anything else — missing, truncated, corrupt, or
@@ -248,6 +286,7 @@ recorded:
 | still lists a chapter whose file hashes to the recorded hash | not requested at all | nothing says otherwise |
 | no longer lists a chapter | reported, and **nothing is deleted** | the user's copy is theirs; a grep of the output is a better record than a silent `rm` |
 | says nothing about revisions (Kakuyomu publishes none) | not requested — unless `--check` is given | one request per chapter is a real cost, so it is opt-in |
+| states a **different synopsis**, or a different cover or synopsis picture URL | rewritten, and a new picture fetched | neither belongs to a chapter, so there is no hash to skip on: the site is the authority, and the old values are replaced. A picture's URL is its identity, so a new one is a new file and the entry for the old file is dropped |
 
 Chapter identity is the **url**, never the number. Kakuyomu numbers episodes by
 position and gives each an opaque id, so an episode inserted in the middle of a

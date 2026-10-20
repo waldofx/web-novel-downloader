@@ -87,12 +87,13 @@ base word. Emitting an empty `<rt>` would leave a hole in the text.
 
 ## Language-dependent wording
 
-Four strings depend on the novel's language, and they live in one table
+Five strings depend on the novel's language, and they live in one table
 (`src/words.rs`) so they cannot drift apart:
 
 | | `ja` | anything else |
 | --- | --- | --- |
 | table of contents | 目次 | Contents |
+| synopsis heading | あらすじ | Synopsis |
 | note before the chapter | 前書き | Author's note |
 | note after the chapter | 後書き | Afterword |
 | scene break, in text | `＊　＊　＊` | `* * *` |
@@ -133,6 +134,8 @@ Structure is carried by whitespace, because there is nothing else to carry it:
 
 - Two blank lines **between chapters**, one blank line between a chapter title and
   its body. The chapter break is the bigger break on purpose.
+- The synopsis is a block list like a body: its paragraphs are lines, and a
+  picture the author put among them becomes its `[画像: alt]` line in place.
 - An arc heading (`【…】`) is printed once, above the first chapter of the arc.
   Repeating it on every chapter is how a site's navigation looks, not how a book
   does.
@@ -171,7 +174,9 @@ does not:
 ```
 
 - The notes become blockquotes, which is how a renderer sets an aside apart.
-- Emphasis, strong text, links and images use real Markdown.
+- Emphasis, strong text, links and images use real Markdown, and the synopsis is
+  rendered the same way: a picture it carries becomes `![](../images/synopsis-<n>.<ext>)`
+  between its paragraphs.
 - **Image paths are rewritten** to `../images/…`. The model's `src` is relative to
   the novel directory, but the Markdown file lives in `exports/`, so the same
   relative path would point at nothing. A `src` that is still a URL — a picture
@@ -192,6 +197,7 @@ An EPUB is a ZIP with rules. In the order they are written:
 | `META-INF/container.xml` | says where the package document is |
 | `OEBPS/style.css` | one small stylesheet, embedded rather than linked |
 | `OEBPS/images/…` | the images, **copied byte for byte** — never re-encoded |
+| `OEBPS/text/synopsis.xhtml` | the work's synopsis and its pictures, when there is one |
 | `OEBPS/text/NNNN.xhtml` | one document per chapter, numbered from the chapter index |
 | `OEBPS/nav.xhtml` | the navigation document (the table of contents), with chapters nested under their arcs |
 | `OEBPS/content.opf` | the package: metadata, manifest, spine |
@@ -209,9 +215,13 @@ Decisions inside the package document:
 - A chapter's **notes are in the same document** as its body, as
   `<aside epub:type="preface">` / `<aside epub:type="afterword">`. A reader can
   style them apart, and they stay attached to the chapter they belong to.
-- Paragraph line breaks (`<br />`): a synopsis keeps its line structure as
-  newlines, and a newline is whitespace in XHTML. Without this, lines would run
-  together.
+- **The synopsis is a page before chapter one**, `<section
+  epub:type="frontmatter">`, and it is also the `dc:description`. It belongs to
+  the work, not to the first chapter — and a page is the only place a picture the
+  author put among its lines can be shown, since a description is words.
+- Paragraph line breaks (`<br />`): a paragraph can carry a newline when the source
+  put a `<br>` inside one, and a newline is whitespace in XHTML. Without this, the
+  lines would run together.
 - **Arcs group chapters**, in the navigation and in the text. A chapter that
   belongs to an arc is nested inside it in `nav.xhtml`: the arc is a list item
   whose heading is a `<span>` — there is no page to link to, it is a divider —
@@ -224,9 +234,9 @@ Decisions inside the package document:
 
 ### Images
 
-Images referenced by the index or by any chapter are collected, sorted,
-de-duplicated, and copied into `OEBPS/images/`. The relative `src` in the XHTML is
-prefixed with `../` because the chapter document lives one level down in `text/`.
+Images referenced by the synopsis, the index or by any chapter are collected,
+sorted, de-duplicated, and copied into `OEBPS/images/`. The relative `src` in the
+XHTML is prefixed with `../` because the documents live one level down in `text/`.
 
 A referenced image that is **not on disk is skipped**, and so is its manifest
 entry. That stays true now that images *are* fetched (see

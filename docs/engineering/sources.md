@@ -254,7 +254,10 @@ hard-codes a work, so a red result means the adapter rather than a stale id.
 
 - [ ] Detect the site from a novel URL (`Source::matches`).
 - [ ] Parse novel metadata (title, author, tags, synopsis, cover, rating). A cover
-      is `cover_url` — a URL, not a path; only the fetcher can store one.
+      is `cover_url` — a URL, not a path; only the fetcher can store one. A
+      synopsis is **blocks**, because a work page can put the author's pictures
+      among its lines; their `src` is a URL too, and the fetcher stores them as
+      `images/synopsis-<n>.<ext>`.
 - [ ] Enumerate the chapter list, in reading order, with stable URLs — plus the
       site's own arc/volume dividers, if it has any. Never infer a divider from a
       chapter's title.
