@@ -10,10 +10,13 @@
 //! stated, because losing a picture is not worth losing the text around it, and
 //! because that URL is the only record of what the site offered.
 //!
-//! # Three ways an image is dealt with
+//! # Four ways an image is dealt with
 //!
 //! - [`store_chapter_images`] runs for every chapter that is fetched at all: it
 //!   names, fetches, stores and rewrites.
+//! - [`store_synopsis_images`] does the same for the pictures a work page puts
+//!   among the synopsis' lines. They belong to the work, not to a chapter, and
+//!   the synopsis is the one block list stored on the manifest itself.
 //! - [`store_cover`] does the same for the work's cover, which belongs to no
 //!   chapter and is the one image an otherwise up-to-date directory can lack.
 //! - [`repair`] re-fetches a recorded image that is no longer what the manifest
@@ -24,6 +27,7 @@ use std::collections::HashMap;
 
 use wnd_core::store::storage::{
     cover_file_name, hash_bytes, image_extension, image_file_name, is_page_media_type,
+    synopsis_file_name,
 };
 use wnd_core::{Block, Chapter, HttpClient, Manifest, NovelDir, StoredImage};
 
@@ -64,14 +68,130 @@ pub(crate) fn store_chapter_images(
     on_progress: &mut impl FnMut(Progress),
 ) {
     let index = chapter.index;
+    store_blocks(
+        dir,
+        fetch,
+        referer,
+        manifest,
+        Pictures::Chapter {
+            index,
+            lists: [
+                &mut chapter.nodes,
+                &mut chapter.pre_note,
+                &mut chapter.post_note,
+            ],
+        },
+        tally,
+        on_progress,
+    );
+}
+
+/// Fetch and store the pictures the work's synopsis carries, then point the
+/// synopsis at them.
+///
+/// A work page can put the author's illustrations among the synopsis' lines, so
+/// they are stored as `images/synopsis-<n>.<ext>` and recorded like any other —
+/// which is what puts them inside `repair`'s reach and keeps an update from
+/// fetching them twice. The synopsis itself lives on the manifest, so this is
+/// the one pass that rewrites the manifest rather than a chapter; the caller
+/// writes it back.
+pub(crate) fn store_synopsis_images(
+    dir: &NovelDir,
+    fetch: &HttpClient,
+    referer: Option<&str>,
+    manifest: &mut Manifest,
+    tally: &mut Stored,
+    on_progress: &mut impl FnMut(Progress),
+) {
+    // Taken out for the length of the pass so the manifest can record what each
+    // picture becomes; it goes back whether or not every fetch worked, and one
+    // that failed keeps its URL — as a chapter's does.
+    let mut blocks = std::mem::take(&mut manifest.synopsis);
+    store_blocks(
+        dir,
+        fetch,
+        referer,
+        manifest,
+        Pictures::Synopsis {
+            lists: [&mut blocks],
+        },
+        tally,
+        on_progress,
+    );
+    manifest.synopsis = blocks;
+}
+
+/// Which pictures are being stored, and what the file names have to say about
+/// them.
+enum Pictures<'a> {
+    /// A chapter: its body and its two notes, all named for the chapter.
+    Chapter {
+        index: u32,
+        lists: [&'a mut Vec<Block>; 3],
+    },
+    /// The work's synopsis: one list, on the manifest.
+    Synopsis { lists: [&'a mut Vec<Block>; 1] },
+}
+
+impl Pictures<'_> {
+    /// The blocks these pictures are in, in reading order.
+    fn each(&self) -> Vec<&Block> {
+        match self {
+            Pictures::Chapter { lists, .. } => lists.iter().flat_map(|list| list.iter()).collect(),
+            Pictures::Synopsis { lists } => lists.iter().flat_map(|list| list.iter()).collect(),
+        }
+    }
+
+    /// The same blocks, to be rewritten.
+    fn each_mut(&mut self) -> Vec<&mut Block> {
+        match self {
+            Pictures::Chapter { lists, .. } => {
+                lists.iter_mut().flat_map(|list| list.iter_mut()).collect()
+            }
+            Pictures::Synopsis { lists } => {
+                lists.iter_mut().flat_map(|list| list.iter_mut()).collect()
+            }
+        }
+    }
+
+    /// What the picture at `position` (counted from one) is called.
+    fn naming(&self, position: usize) -> Naming {
+        match self {
+            Pictures::Chapter { index, .. } => Naming::Chapter {
+                index: *index,
+                position,
+            },
+            Pictures::Synopsis { .. } => Naming::Synopsis { position },
+        }
+    }
+}
+
+/// Store every distinct picture in `pictures`, then rewrite the blocks to the paths.
+///
+/// A chapter's pictures are spread over three lists (`nodes` and the two notes),
+/// and a synopsis' are in one; the numbering counts the *distinct* pictures
+/// across all of them, in reading order, so a picture repeated in an afterword
+/// is one file.
+fn store_blocks(
+    dir: &NovelDir,
+    fetch: &HttpClient,
+    referer: Option<&str>,
+    manifest: &mut Manifest,
+    mut pictures: Pictures<'_>,
+    tally: &mut Stored,
+    on_progress: &mut impl FnMut(Progress),
+) {
     let mut stored: HashMap<String, String> = HashMap::new();
 
-    for (position, url) in image_urls(chapter).into_iter().enumerate() {
-        let naming = Naming::Chapter {
-            index,
-            position: position + 1,
-        };
-        match store_one(dir, fetch, referer, manifest, &url, naming) {
+    for (position, url) in image_urls(pictures.each()).into_iter().enumerate() {
+        match store_one(
+            dir,
+            fetch,
+            referer,
+            manifest,
+            &url,
+            pictures.naming(position + 1),
+        ) {
             Outcome::Ready { file, bytes } => {
                 if bytes > 0 {
                     tally.fetched += 1;
@@ -90,7 +210,7 @@ pub(crate) fn store_chapter_images(
         }
     }
 
-    rewrite(chapter, &stored);
+    rewrite(pictures.each_mut(), &stored);
 }
 
 /// Fetch and store the work's cover, and record where it landed.
@@ -201,6 +321,8 @@ pub(crate) fn repair(
 enum Naming {
     /// A chapter's `position`th distinct image.
     Chapter { index: u32, position: usize },
+    /// A synopsis' `position`th distinct image.
+    Synopsis { position: usize },
     /// The work's cover.
     Cover,
 }
@@ -242,6 +364,7 @@ fn store_one(
 
     let file = match naming {
         Naming::Chapter { index, position } => image_file_name(index, position, &extension),
+        Naming::Synopsis { position } => synopsis_file_name(position, &extension),
         Naming::Cover => cover_file_name(&extension),
     };
 
@@ -306,14 +429,9 @@ fn intact(dir: &NovelDir, file: &str, hash: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// The distinct image URLs of a chapter, in the order the chapter says them.
-fn image_urls(chapter: &Chapter) -> Vec<String> {
+/// The distinct image URLs of these blocks, in the order the page says them.
+fn image_urls<'a>(blocks: impl IntoIterator<Item = &'a Block>) -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
-    let blocks = chapter
-        .nodes
-        .iter()
-        .chain(&chapter.pre_note)
-        .chain(&chapter.post_note);
     for block in blocks {
         if let Block::Image { src, .. } = block {
             if !urls.iter().any(|seen| seen == src) {
@@ -325,12 +443,7 @@ fn image_urls(chapter: &Chapter) -> Vec<String> {
 }
 
 /// Point every image block at the stored copy of what it referenced.
-fn rewrite(chapter: &mut Chapter, stored: &HashMap<String, String>) {
-    let blocks = chapter
-        .nodes
-        .iter_mut()
-        .chain(&mut chapter.pre_note)
-        .chain(&mut chapter.post_note);
+fn rewrite<'a>(blocks: impl IntoIterator<Item = &'a mut Block>, stored: &HashMap<String, String>) {
     for block in blocks {
         if let Block::Image { src, .. } = block {
             if let Some(file) = stored.get(src) {

@@ -43,12 +43,16 @@ pub(crate) const KAKUYOMU_WORK_FLAT: &str =
 /// not be read as story text.
 pub(crate) const KAKUYOMU_CHAPTER: &str = include_str!("../tests/fixtures/kakuyomu/chapter.html");
 
-/// A Hameln work page: title, author, tags, a synopsis, six arcs, and chapter
-/// rows with published dates and a revision stamp.
+/// A Hameln work page: title, author, tags, a synopsis with the author's
+/// pictures among its lines, six arcs, and chapter rows with published dates
+/// and a revision stamp.
 ///
 /// Trimmed to the containers the parser reads, with twelve rows: the site puts
 /// its whole list on one page, and that is a fact about the site, not something
-/// a dozen rows could show either way. The words are placeholders (#41).
+/// a dozen rows could show either way. The header logo, the rating bars, the
+/// tracker and the translate button are kept just outside the synopsis' section,
+/// because the boundary between them is what the parser has to get right (#50).
+/// The words are placeholders (#41).
 pub(crate) const HAMELN_WORK: &str = include_str!("../tests/fixtures/hameln/work.html");
 
 /// A Hameln chapter page: a title and a body in `#honbun`, with `<ruby>`.

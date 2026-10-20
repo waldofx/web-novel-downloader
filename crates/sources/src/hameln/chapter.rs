@@ -10,22 +10,22 @@
 //!
 //! The author's 後書き is `#atogaki` — `<br>`-separated lines rather than `<p>`s,
 //! with the site's own toggle link in the `#atogaki_open` element beside it, which
-//! is why the container is selected exactly. A Hameln chapter has **no** 前書き:
-//! no page here carries a container for one, so `pre_note` stays empty for this
-//! site.
+//! is why the container is selected exactly ([`super::lines`]). A Hameln chapter
+//! has **no** 前書き: no page here carries a container for one, so `pre_note`
+//! stays empty for this site.
 //!
 //! Hameln wraps an illustration in an `<a>` and writes the `alt` on that `<a>`
 //! rather than on the `<img>` — which is not where HTML says it goes, and is
 //! where the site puts it, so the picture keeps the description the author gave
 //! it and the link around it, which points at the same picture, is not kept.
 
-use super::{SEL_AFTERWORD, SEL_TITLE_SPAN};
+use super::{SEL_AFTERWORD, SEL_TITLE_SPAN, lines};
 use crate::SourceError;
 use crate::blocks;
 use crate::dom::element_text;
 use crate::inline::{self, Piece, plain_text};
 use scraper::{ElementRef, Html, Selector};
-use wnd_core::{Block, Chapter, ChapterMeta, Inline};
+use wnd_core::{Block, Chapter, ChapterMeta};
 
 /// Parse a chapter page into the node model.
 pub fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceError> {
@@ -76,7 +76,7 @@ pub fn parse_chapter(html: &str, meta: &ChapterMeta) -> Result<Chapter, SourceEr
     chapter.nodes = blocks::from_line_blocks(lines);
 
     if let Some(afterword) = document.select(&SEL_AFTERWORD).next() {
-        chapter.post_note = blocks::from_line_blocks(note_lines(&afterword, &meta.url));
+        chapter.post_note = lines::blocks_of(&afterword, &meta.url);
     }
 
     Ok(chapter)
@@ -102,94 +102,6 @@ fn title_of(body: &ElementRef) -> Option<String> {
         }
     }
     None
-}
-
-/// The afterword's lines.
-///
-/// The site separates the lines of a note with `<br>`, where a body's lines are
-/// `<p>`s, so the runs of inline content are split where those breaks fall and
-/// the shared rule decides what a run of empty lines means. The `<br><hr><br>`
-/// the site writes before the note is a separator — it drops as leading blanks —
-/// and the toggle link that follows the note is a different element this
-/// container does not cover.
-fn note_lines(container: &ElementRef, page: &str) -> Vec<Option<Vec<Block>>> {
-    let mut lines = vec![Line::default()];
-
-    for piece in inline::pieces_of(container, plain_text, page) {
-        match piece {
-            Piece::Image { src, alt } => {
-                let line = lines.last_mut().expect("a line is always open");
-                line.content = true;
-                line.blocks.push(Block::Image { src, alt });
-            }
-            Piece::Inline(nodes) => {
-                for (position, part) in split_lines(nodes).into_iter().enumerate() {
-                    if position > 0 {
-                        lines.push(Line::default());
-                    }
-                    let line = lines.last_mut().expect("a line is always open");
-                    line.content |= has_content(&part);
-                    if !part.is_empty() {
-                        line.blocks.push(Block::Paragraph { children: part });
-                    }
-                }
-            }
-        }
-    }
-
-    lines
-        .into_iter()
-        .map(|line| line.content.then_some(line.blocks))
-        .collect()
-}
-
-/// One line being built: its blocks, and whether anything but whitespace is in
-/// it. A line of just the paragraph indent is blank, as it is in a body.
-#[derive(Default)]
-struct Line {
-    content: bool,
-    blocks: Vec<Block>,
-}
-
-/// A run of inline nodes, split where the text says a `<br>` was.
-fn split_lines(nodes: Vec<Inline>) -> Vec<Vec<Inline>> {
-    let mut lines = vec![Vec::new()];
-
-    for node in nodes {
-        match node {
-            Inline::Text { value } => {
-                let mut parts = value.split('\n');
-                push_text(
-                    lines.last_mut().expect("a line is always open"),
-                    parts.next().unwrap_or_default(),
-                );
-                for part in parts {
-                    lines.push(Vec::new());
-                    push_text(lines.last_mut().expect("a line is always open"), part);
-                }
-            }
-            other => lines.last_mut().expect("a line is always open").push(other),
-        }
-    }
-
-    lines
-}
-
-/// A non-empty run of text, as a node.
-fn push_text(line: &mut Vec<Inline>, value: &str) {
-    if !value.is_empty() {
-        line.push(Inline::Text {
-            value: value.to_string(),
-        });
-    }
-}
-
-/// Whether a run holds anything a reader would see.
-fn has_content(nodes: &[Inline]) -> bool {
-    nodes.iter().any(|node| match node {
-        Inline::Text { value } => !value.trim().is_empty(),
-        _ => true,
-    })
 }
 
 #[cfg(test)]

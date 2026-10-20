@@ -55,6 +55,16 @@ pub fn cover_file_name(extension: &str) -> String {
     format!("images/cover.{extension}")
 }
 
+/// File name for a picture the work's synopsis carries, e.g.
+/// `images/synopsis-1.png`.
+///
+/// `position` counts the synopsis' *distinct* pictures from one, as a chapter's
+/// does: a picture keeps its name when the prose around it is edited. Not
+/// zero-padded, because a synopsis has a handful of pictures, not a thousand.
+pub fn synopsis_file_name(position: usize, extension: &str) -> String {
+    format!("images/synopsis-{position}.{extension}")
+}
+
 /// The extension an image is stored under.
 ///
 /// The server's media type comes first, because the extension is what every
@@ -629,6 +639,63 @@ mod tests {
         assert_eq!(image_file_name(1, 1, "png"), "images/0001-1.png");
         assert_eq!(image_file_name(42, 12, "jpg"), "images/0042-12.jpg");
         assert_eq!(cover_file_name("webp"), "images/cover.webp");
+    }
+
+    #[test]
+    fn a_synopsis_image_is_named_for_where_it_sits() {
+        // A work's own pictures belong neither to a chapter nor to the cover,
+        // so their names say where they were found; one list, in the order the
+        // synopsis has them.
+        assert_eq!(synopsis_file_name(1, "png"), "images/synopsis-1.png");
+        assert_eq!(
+            synopsis_file_name(12, "jpeg"),
+            "images/synopsis-12.jpeg",
+            "no zero padding: a synopsis has ten pictures, not ten thousand"
+        );
+    }
+
+    #[test]
+    fn a_version_1_manifest_on_disk_still_opens() {
+        // What a directory written before the synopsis became blocks actually
+        // holds on disk. `nvd update` exists to update such directories, so it
+        // has to be able to open them — and reading must not rewrite the file.
+        let dir = temp_novel("v1");
+        dir.ensure_layout().unwrap();
+        fs::write(
+            dir.manifest_path(),
+            r#"{"format_version":1,
+                "source":{"id":"narou","novel_url":"https://ncode.syosetu.com/n0000aa/"},
+                "title":"古い見本","language":"ja","content_rating":"general",
+                "synopsis":"一行目の見本です。\n二行目の見本です。","chapters":[]}"#,
+        )
+        .unwrap();
+
+        let before = fs::read(dir.manifest_path()).unwrap();
+        let manifest = dir.read_manifest().unwrap();
+
+        assert_eq!(
+            fs::read(dir.manifest_path()).unwrap(),
+            before,
+            "reading must not rewrite a directory it only looked at"
+        );
+        assert_eq!(manifest.format_version, 1);
+        assert_eq!(
+            manifest.synopsis,
+            vec![
+                Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: "一行目の見本です。".to_string()
+                    }]
+                },
+                Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: "二行目の見本です。".to_string()
+                    }]
+                },
+            ],
+            "a v1 synopsis is the text the site stated, one paragraph per line"
+        );
+        fs::remove_dir_all(dir.root()).ok();
     }
 
     #[test]

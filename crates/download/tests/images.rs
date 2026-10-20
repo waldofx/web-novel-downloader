@@ -10,7 +10,7 @@ mod common;
 
 use common::{FakeSource, Image, ImageServer, TempDir, local_client};
 use url::Url;
-use wnd_core::{Block, Chapter, NovelDir};
+use wnd_core::{Block, Chapter, Inline, NovelDir};
 use wnd_download::{DownloadOptions, Progress, UpdateOptions, download_from, update_from};
 
 fn download(source: &FakeSource, dir: &TempDir) -> (wnd_download::Summary, Vec<Progress>) {
@@ -326,4 +326,130 @@ fn two_images_of_one_chapter_are_numbered_and_a_second_run_keeps_them() {
         image_sources(&chapter),
         ["images/0001-1.png", "images/0001-2.png"]
     );
+}
+
+/// A synopsis with one picture between two lines of prose.
+fn synopsis_with(art: &str) -> Vec<Block> {
+    vec![
+        Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "あらすじの一行目。".to_string(),
+            }],
+        },
+        Block::Image {
+            src: art.to_string(),
+            alt: Some("挿絵".to_string()),
+        },
+        Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "あらすじの二行目。".to_string(),
+            }],
+        },
+    ]
+}
+
+#[test]
+fn a_synopsis_picture_becomes_a_file_the_synopsis_points_at() {
+    let dir = TempDir::new("images-synopsis");
+    let server = ImageServer::start(Image::png("PNG-synopsis"));
+    let art = server.url("art/1.png");
+    let source = FakeSource::new(1).with_synopsis(synopsis_with(&art));
+
+    let (summary, progress) = download(&source, &dir);
+
+    assert_eq!(summary.images_fetched, 1);
+    assert_eq!(summary.images_missing, 0);
+
+    let novel = NovelDir::at(dir.path());
+    let manifest = novel.read_manifest().unwrap();
+
+    assert_eq!(
+        novel.read_image("images/synopsis-1.png").unwrap(),
+        b"PNG-synopsis"
+    );
+    assert_eq!(
+        manifest.image(&art).map(|image| image.file.as_str()),
+        Some("images/synopsis-1.png"),
+        "recorded like any other picture, so repair and a later update find it"
+    );
+    assert_eq!(
+        manifest.synopsis[1],
+        Block::Image {
+            src: "images/synopsis-1.png".to_string(),
+            alt: Some("挿絵".to_string()),
+        },
+        "a stored synopsis holds the path, in the place the author gave the picture"
+    );
+    assert!(
+        matches!(&manifest.synopsis[0], Block::Paragraph { children } if children.len() == 1),
+        "the prose around it stays where it was: {:?}",
+        manifest.synopsis
+    );
+
+    // The picture is reported under the name that says where it belongs.
+    let stored: Vec<&str> = progress
+        .iter()
+        .filter_map(|event| match event {
+            Progress::ImageFetched { file, .. } => Some(file.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(stored, ["images/synopsis-1.png"]);
+}
+
+#[test]
+fn an_update_leaves_a_stored_synopsis_pointing_at_its_picture() {
+    let dir = TempDir::new("images-synopsis-update");
+    let server = ImageServer::start(Image::png("PNG"));
+    let art = server.url("art.png");
+    let source = FakeSource::new(1).with_synopsis(synopsis_with(&art));
+
+    download(&source, &dir);
+    let after_download = server.request_count();
+
+    let summary = update(&source, &dir, false);
+
+    // The fresh manifest states the site's URL; the stored one has to keep the
+    // path, or the export loses the picture and the next update fetches it again.
+    let manifest = NovelDir::at(dir.path()).read_manifest().unwrap();
+    assert_eq!(
+        manifest.synopsis[1],
+        Block::Image {
+            src: "images/synopsis-1.png".to_string(),
+            alt: Some("挿絵".to_string()),
+        }
+    );
+    assert!(summary.up_to_date(), "a synopsis is not news");
+    assert_eq!(
+        server.request_count(),
+        after_download,
+        "nothing was fetched again"
+    );
+}
+
+#[test]
+fn a_synopsis_picture_deleted_by_hand_comes_back() {
+    let dir = TempDir::new("images-synopsis-repair");
+    let server = ImageServer::start(Image::png("PNG"));
+    let art = server.url("art.png");
+    let source = FakeSource::new(1).with_synopsis(synopsis_with(&art));
+
+    download(&source, &dir);
+    let after_download = server.request_count();
+
+    std::fs::remove_file(dir.path().join("images/synopsis-1.png")).unwrap();
+
+    let summary = update(&source, &dir, false);
+
+    let novel = NovelDir::at(dir.path());
+    assert_eq!(summary.images_fetched, 1);
+    assert_eq!(novel.read_image("images/synopsis-1.png").unwrap(), b"PNG");
+    assert_eq!(
+        novel.read_manifest().unwrap().synopsis[1],
+        Block::Image {
+            src: "images/synopsis-1.png".to_string(),
+            alt: Some("挿絵".to_string()),
+        }
+    );
+    assert_eq!(server.request_count(), after_download + 1);
 }

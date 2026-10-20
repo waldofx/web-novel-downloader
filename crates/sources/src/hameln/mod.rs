@@ -7,6 +7,7 @@
 //! host rather than from the page.
 
 mod chapter;
+mod lines;
 mod toc;
 
 pub use chapter::parse_chapter;

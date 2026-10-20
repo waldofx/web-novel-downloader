@@ -47,7 +47,18 @@ fn fixture_manifest() -> Manifest {
         "ja",
     );
     manifest.author = Some("見本作者".to_string());
-    manifest.synopsis = Some("――これはあらすじの見本です。\n\n本文ではありません。".to_string());
+    manifest.synopsis = vec![
+        Block::Paragraph {
+            children: vec![text("――これはあらすじの見本です。")],
+        },
+        Block::Image {
+            src: "images/synopsis-1.png".to_string(),
+            alt: Some("あらすじの挿絵".to_string()),
+        },
+        Block::Paragraph {
+            children: vec![text("本文ではありません。")],
+        },
+    ];
     manifest.cover = Some("images/cover.png".to_string());
     manifest.content_rating = ContentRating::General;
     manifest.chapters = vec![
@@ -116,6 +127,11 @@ fn fixture(tag: &str) -> (TempDir, NovelDir) {
     write_bytes(novel.root(), "images/cover.png", b"\x89PNG\r\n\x1a\ncover");
     write_bytes(
         novel.root(),
+        "images/synopsis-1.png",
+        b"\x89PNG\r\n\x1a\nsynopsis",
+    );
+    write_bytes(
+        novel.root(),
         "images/0001-1.png",
         b"\x89PNG\r\n\x1a\nillustration",
     );
@@ -174,7 +190,7 @@ fn the_txt_export_is_plain_text_in_reading_order() {
         "見本作者",
         "",
         "――これはあらすじの見本です。",
-        "",
+        "[画像: あらすじの挿絵]",
         "本文ではありません。",
         "",
         "",
@@ -280,8 +296,9 @@ fn the_markdown_export_uses_markup_and_relative_image_paths() {
         "",
         "――これはあらすじの見本です。",
         "",
-        "本文ではありません。",
+        "![あらすじの挿絵](../images/synopsis-1.png)",
         "",
+        "本文ではありません。",
         "",
         "## 第一章　見本の章",
         "",
@@ -469,6 +486,8 @@ fn the_epub_has_a_container_a_package_and_one_document_per_chapter() {
         "OEBPS/content.opf",
         "OEBPS/nav.xhtml",
         "OEBPS/style.css",
+        "OEBPS/text/synopsis.xhtml",
+        "OEBPS/images/synopsis-1.png",
     ] {
         assert!(names.contains(&expected.to_string()), "missing {expected}");
     }
@@ -486,6 +505,38 @@ fn the_epub_has_a_container_a_package_and_one_document_per_chapter() {
     assert!(opf.contains("<dc:language>ja</dc:language>"));
     assert!(opf.contains(&format!("<dc:identifier id=\"novel-url\">{NOVEL_URL}")));
     assert!(opf.contains("properties=\"nav\""));
+}
+
+#[test]
+fn the_epub_opens_with_the_synopsis_and_its_picture() {
+    let (_guard, novel) = fixture("epub-synopsis");
+    let summary = export(&novel, Format::Epub, &ExportOptions::default()).unwrap();
+
+    let page = entry(&summary.path, "OEBPS/text/synopsis.xhtml");
+    assert!(page.contains("epub:type=\"frontmatter\""), "got:\n{page}");
+    assert!(
+        page.contains("――これはあらすじの見本です。"),
+        "got:\n{page}"
+    );
+    assert!(
+        page.contains("<img src=\"../images/synopsis-1.png\" alt=\"あらすじの挿絵\" />"),
+        "the picture sits between its lines, where the author put it:\n{page}"
+    );
+    assert!(page.contains("本文ではありません。"), "got:\n{page}");
+
+    // The spine opens with it, and the description keeps the words so a reader
+    // that shows metadata has the synopsis too.
+    let opf = entry(&summary.path, "OEBPS/content.opf");
+    assert!(
+        opf.contains("<spine>\n<itemref idref=\"synopsis\" />\n<itemref idref=\"chapter-1\" />"),
+        "the synopsis page comes before the first chapter:\n{opf}"
+    );
+    assert!(
+        opf.contains(
+            "<dc:description>――これはあらすじの見本です。\n\n本文ではありません。</dc:description>"
+        ),
+        "got:\n{opf}"
+    );
 }
 
 #[test]

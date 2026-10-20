@@ -39,7 +39,9 @@ use scraper::Html;
 use serde::de::DeserializeOwned;
 use url::Url;
 use wnd_core::store::storage::chapter_file_name;
-use wnd_core::{Chapter, ChapterMeta, ContentRating, HttpClient, Manifest, Page, SourceInfo};
+use wnd_core::{
+    Block, Chapter, ChapterMeta, ContentRating, HttpClient, Manifest, Page, SourceInfo,
+};
 
 pub struct Pixiv;
 
@@ -451,12 +453,12 @@ fn rating(x_restrict: i64) -> ContentRating {
 }
 
 /// The site publishes a description as HTML: `<br />` for a line break, and
-/// occasionally a link around part of it. The model's synopsis is plain text
-/// with its line breaks kept, so the markup is read as markup rather than
-/// pasted into the synopsis as tags.
-fn synopsis(description: &str) -> Option<String> {
+/// occasionally a link around part of it. The model's synopsis is blocks, so the
+/// markup is read as markup rather than pasted in as tags, and each line becomes
+/// a paragraph — which is what the site's line breaks meant.
+fn synopsis(description: &str) -> Vec<Block> {
     let document = Html::parse_fragment(description);
-    non_empty(&dom::element_text(&document.root_element()))
+    Block::paragraphs(&dom::element_text(&document.root_element()))
 }
 
 fn non_empty(value: &str) -> Option<String> {
@@ -698,9 +700,20 @@ mod tests {
         assert_eq!(manifest.tags, vec!["R-18", "学園", "SF"]);
         assert_eq!(manifest.content_rating, ContentRating::Adult);
         assert_eq!(
-            manifest.synopsis.as_deref(),
-            Some("シリーズの説明一行目。\n二行目。"),
-            "the description is HTML with line breaks, and the synopsis keeps them"
+            manifest.synopsis,
+            vec![
+                Block::Paragraph {
+                    children: vec![wnd_core::Inline::Text {
+                        value: "シリーズの説明一行目。".to_string()
+                    }]
+                },
+                Block::Paragraph {
+                    children: vec![wnd_core::Inline::Text {
+                        value: "二行目。".to_string()
+                    }]
+                },
+            ],
+            "the description is HTML with line breaks, and each line is a paragraph"
         );
         assert_eq!(
             manifest.cover_url.as_deref(),

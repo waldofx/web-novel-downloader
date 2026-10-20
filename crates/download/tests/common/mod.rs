@@ -64,6 +64,9 @@ pub struct FakeSource {
     pub fail_index: Option<u32>,
     /// The cover URL the index states. `None` for a site with no covers.
     pub cover_url: Mutex<Option<String>>,
+    /// The synopsis the work page states, if it states one. Pictures in it are
+    /// the work's rather than a chapter's.
+    pub synopsis: Mutex<Vec<Block>>,
     /// What this adapter says its images must be requested with.
     pub referer: Option<&'static str>,
 }
@@ -89,6 +92,7 @@ impl FakeSource {
             chapter_fetches: AtomicUsize::new(0),
             fail_index: None,
             cover_url: Mutex::new(None),
+            synopsis: Mutex::new(Vec::new()),
             referer: None,
         }
     }
@@ -103,6 +107,12 @@ impl FakeSource {
     /// State a cover, the way an adapter reads one off a work page.
     pub fn with_cover(self, url: &str) -> Self {
         *self.cover_url.lock().unwrap() = Some(url.to_string());
+        self
+    }
+
+    /// State a synopsis, the way a work page states one.
+    pub fn with_synopsis(self, blocks: Vec<Block>) -> Self {
+        *self.synopsis.lock().unwrap() = blocks;
         self
     }
 
@@ -189,6 +199,7 @@ impl Source for FakeSource {
         );
         manifest.content_rating = self.rating;
         manifest.cover_url = self.cover_url.lock().unwrap().clone();
+        manifest.synopsis = self.synopsis.lock().unwrap().clone();
         manifest.chapters = self
             .chapters()
             .iter()

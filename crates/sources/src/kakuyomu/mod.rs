@@ -32,7 +32,7 @@ mod work;
 use crate::{Source, SourceError};
 use apollo::Apollo;
 use url::Url;
-use wnd_core::{Chapter, ChapterMeta, ContentRating, HttpClient, Manifest, SourceInfo};
+use wnd_core::{Block, Chapter, ChapterMeta, ContentRating, HttpClient, Manifest, SourceInfo};
 
 pub struct Kakuyomu;
 
@@ -114,7 +114,10 @@ impl Source for Kakuyomu {
             "ja",
         );
         manifest.author = page.author;
-        manifest.synopsis = page.synopsis;
+        manifest.synopsis = page
+            .synopsis
+            .map(|text| Block::paragraphs(&text))
+            .unwrap_or_default();
         manifest.tags = page.tags;
         manifest.content_rating = self.content_rating();
         manifest.chapters = page.chapters;

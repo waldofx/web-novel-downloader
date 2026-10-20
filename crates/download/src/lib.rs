@@ -25,8 +25,11 @@
 //! Images are the second half of step 4, and they come *before* the chapter is
 //! written: an adapter leaves a picture as a URL, since only a fetcher can put
 //! one on disk, and a chapter is not written until its blocks point at the stored
-//! copies. [`images`] explains why an image that cannot be fetched is reported
-//! rather than fatal.
+//! copies. A **synopsis is treated the same way** even though it belongs to the
+//! work: its pictures are stored and its blocks rewritten before the first
+//! chapter, so a directory whose chapters are all up to date still holds a
+//! synopsis an export can follow. [`images`] explains why an image that cannot be
+//! fetched is reported rather than fatal.
 //!
 //! # Updating, which is the same sequence with a memory
 //!
@@ -91,7 +94,8 @@ pub enum Progress {
     /// One image was fetched and written into `images/`.
     ///
     /// An image that was already stored is not reported: nothing happened. The
-    /// file name says what it is — `images/cover.png` is the work's cover, and
+    /// file name says what it is — `images/cover.png` is the work's cover,
+    /// `images/synopsis-1.png` is the first picture of the work's synopsis, and
     /// `images/0003-1.png` is the first picture of chapter three.
     ImageFetched { file: String, bytes: u64 },
     /// One image could not be fetched — a `404`, a filter, a dead host.
@@ -467,18 +471,19 @@ fn run(
         bytes_written: 0,
     };
 
-    // Whatever is not a chapter goes first: a cover belongs to the work rather
-    // than to any chapter, and repairing what the plan cannot see has to happen
-    // before the loop, because a chapter that is skipped is never looked into.
-    // Doing both before the first chapter means a failure later costs neither.
+    // Whatever is not a chapter goes first: repairing what the plan cannot see,
+    // then the cover, then the synopsis' illustrations. Each belongs to the work
+    // rather than to any chapter, and the repair has to happen before the loop,
+    // because a chapter that is skipped is never looked into. Doing them before
+    // the first chapter means a failure later costs none of them.
     let referer = source.image_referer();
-    let mut covers = images::Stored::default();
+    let mut work_images = images::Stored::default();
     images::repair(
         &dir,
         fetch,
         referer,
         &mut manifest,
-        &mut covers,
+        &mut work_images,
         on_progress,
     );
     images::store_cover(
@@ -486,14 +491,28 @@ fn run(
         fetch,
         referer,
         &mut manifest,
-        &mut covers,
+        &mut work_images,
         on_progress,
     );
-    outcome.images.merge(covers);
-    outcome.bytes_written += covers.bytes;
-    if covers.fetched > 0 {
-        dir.write_manifest(&manifest)?;
-    }
+    // The synopsis is a manifest field, and the site states URLs where a stored
+    // one holds paths, so it is stored before it is written back — an update
+    // then compares like with like, and the pictures it points at are recorded
+    // for `repair`.
+    images::store_synopsis_images(
+        &dir,
+        fetch,
+        referer,
+        &mut manifest,
+        &mut work_images,
+        on_progress,
+    );
+    outcome.images.merge(work_images);
+    outcome.bytes_written += work_images.bytes;
+
+    // Written whether or not anything was fetched: the synopsis above was
+    // rewritten from URLs to paths, and a run whose chapters are all skipped
+    // must still leave that in the manifest.
+    dir.write_manifest(&manifest)?;
 
     for (position, step) in plan.iter().enumerate() {
         let index = manifest.chapters[position].index;

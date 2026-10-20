@@ -395,11 +395,9 @@ fn downloads_a_real_kakuyomu_novel_from_an_episode_url() {
         "tags come from the page snapshot"
     );
     assert!(
-        manifest
-            .synopsis
-            .as_deref()
-            .is_some_and(|s| s.contains('\n')),
-        "the synopsis keeps its paragraph breaks"
+        manifest.synopsis.len() > 1,
+        "the synopsis keeps its paragraph breaks: {:?}",
+        manifest.synopsis
     );
     assert_eq!(
         manifest.chapters.len(),

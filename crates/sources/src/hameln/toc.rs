@@ -6,14 +6,19 @@
 //! Arc headings and chapter rows share one document-ordered selection, which is
 //! what makes "the arc a chapter belongs to" simply *the heading seen most
 //! recently*.
+//!
+//! The synopsis is not text here: the author puts their illustrations among its
+//! lines, so it is read with the same `<br>`-line walk a 後書き uses
+//! ([`super::lines`]) and keeps each picture where they put it.
 
 use super::{
     SEL_AUTHOR, SEL_CHAPTER_TITLE, SEL_EPISODE_DATE, SEL_EPISODE_LINK, SEL_EPISODE_LIST,
-    SEL_EPISODE_REVISION, SEL_EPISODE_TITLE, SEL_SS, SEL_TAGS, SEL_TITLE,
+    SEL_EPISODE_REVISION, SEL_EPISODE_TITLE, SEL_SS, SEL_TAGS, SEL_TITLE, lines,
 };
 use crate::dom::{element_text, first_text, is_class};
 use scraper::{ElementRef, Html};
 use url::Url;
+use wnd_core::Block;
 use wnd_core::ChapterMeta;
 use wnd_core::store::storage::chapter_file_name;
 
@@ -23,7 +28,8 @@ pub struct Toc {
     pub title: Option<String>,
     pub author: Option<String>,
     pub tags: Vec<String>,
-    pub synopsis: Option<String>,
+    /// The author's description of the work, with the pictures they put in it.
+    pub synopsis: Vec<Block>,
     pub entries: Vec<ChapterMeta>,
     /// Arc in effect when the list ended, carried for completeness.
     pub end_arc: Option<String>,
@@ -38,7 +44,7 @@ pub fn parse_toc(html: &str, base: &Url) -> Toc {
         title: first_text(&document, &SEL_TITLE),
         author: first_text(&document, &SEL_AUTHOR).map(|text| strip_author_prefix(&text)),
         tags: collect_tags(&document),
-        synopsis: synopsis_of(&document),
+        synopsis: synopsis_of(&document, base.as_str()),
         ..Toc::default()
     };
 
@@ -128,23 +134,19 @@ fn collect_tags(document: &Html) -> Vec<String> {
         .collect()
 }
 
-fn synopsis_of(document: &Html) -> Option<String> {
-    // The synopsis lives in the second `div.ss`, mixed with illustrations.
-    // Take its text and keep only the leading paragraph.
-    let sections: Vec<String> = document
-        .select(&SEL_SS)
-        .map(|element| element_text(&element))
-        .collect();
-    // The first section is the title/author/tags block; the second is the body.
-    let body = sections.get(1)?;
-    let synopsis = body
-        .split("\n\n")
-        .map(str::trim)
-        .find(|chunk| !chunk.is_empty() && !chunk.contains("挿絵"))?;
-    if synopsis.is_empty() {
-        None
-    } else {
-        Some(synopsis.to_string())
+/// The author's synopsis, with the pictures they put among its lines.
+///
+/// The first `div.ss` is the title/author/tags block and the one after it is the
+/// synopsis; the episode list follows. That boundary is what makes the pictures
+/// answerable: the page also carries the site's logo, five rating bars, a
+/// tracker and a translate button, and none of them is in this section.
+///
+/// Its lines are `<br>` runs like a note's, not `<p>`s like a body's, so it is
+/// read with the same walk (`super::lines`).
+fn synopsis_of(document: &Html, page: &str) -> Vec<Block> {
+    match document.select(&SEL_SS).nth(1) {
+        Some(body) => lines::blocks_of(&body, page),
+        None => Vec::new(),
     }
 }
 
@@ -218,6 +220,13 @@ mod tests {
     use super::*;
     use crate::fixtures::HAMELN_WORK;
     use url::Url;
+    use wnd_core::{Block, Inline};
+
+    fn text(value: &str) -> Inline {
+        Inline::Text {
+            value: value.to_string(),
+        }
+    }
 
     fn base() -> Url {
         Url::parse("https://syosetu.org/novel/000000/").unwrap()
@@ -245,15 +254,71 @@ mod tests {
     }
 
     #[test]
-    fn the_work_page_yields_a_synopsis() {
+    fn the_synopsis_is_blocks_and_keeps_the_author_s_pictures_where_they_sit() {
         let toc = parse_toc(HAMELN_WORK, &base());
-        assert!(
-            toc.synopsis
-                .as_deref()
-                .unwrap_or("")
-                .contains("見本のあらすじ"),
-            "got: {:?}",
-            toc.synopsis
+
+        assert_eq!(
+            toc.synopsis,
+            vec![
+                Block::Paragraph {
+                    children: vec![text(
+                        "見本のあらすじです。ここから先の文章は本文ではありません。"
+                    )]
+                },
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![text("見本様より・見本の絵")]
+                },
+                Block::Image {
+                    src: "http://img.example.test/user/0000/000/000001.png".to_string(),
+                    alt: Some("挿絵".to_string()),
+                },
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![text("見本様より・見本の絵その二")]
+                },
+                Block::Image {
+                    src: "http://img.example.test/user/v2/0000/000/000002.png".to_string(),
+                    alt: Some("挿絵".to_string()),
+                },
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![text("あらすじの二行目の見本です。")]
+                },
+                Block::SceneBreak,
+                Block::Paragraph {
+                    children: vec![text("あらすじの最後の見本です。")]
+                },
+            ],
+            "the synopsis' lines are `<br>` runs like a note's, and a picture is a \
+             block that keeps the place the author gave it"
+        );
+    }
+
+    #[test]
+    fn the_site_s_chrome_is_not_part_of_the_synopsis() {
+        // The page carries the site's logo in its header, a rating bar and a
+        // tracker after the work's section. None of them is the author's, and
+        // none is inside the `div.ss` the synopsis is read from — which is the
+        // whole reason that section is selected rather than the page.
+        let toc = parse_toc(HAMELN_WORK, &base());
+
+        let pictures: Vec<&str> = toc
+            .synopsis
+            .iter()
+            .filter_map(|block| match block {
+                Block::Image { src, .. } => Some(src.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            pictures,
+            [
+                "http://img.example.test/user/0000/000/000001.png",
+                "http://img.example.test/user/v2/0000/000/000002.png",
+            ],
+            "the two author pictures, and nothing the site put around them"
         );
     }
 
