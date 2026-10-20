@@ -39,3 +39,14 @@ tauri-build = "2"
 # would be the same crate behind a permission, and this is the whole of what the
 # app needs from it.
 rfd = "0.15"
+
+# The build cache is not the product. Full debug information and an incremental
+# cache once took `target/debug` to 25 GB across repeated Tauri test builds;
+# line tables keep a panic's location without the rest, and dependencies need no
+# debug info at all. See docs/engineering/testing.md#the-build-cache.
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.dev.package."*"]
+debug = false
