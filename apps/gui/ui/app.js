@@ -24,6 +24,9 @@ let rows = new Map();
 let counts = { fetched: 0, skipped: 0, checked: 0, images: 0, missing: 0, bytes: 0 };
 /** The saved sessions, as the picker and the manager need them. */
 let sessionList = [];
+/** The works the library folder holds, and the folder they came from. */
+let libraryItems = [];
+let libraryRoot = "";
 
 // ---------------------------------------------------------------- formatting
 
@@ -55,6 +58,7 @@ function paragraph(className, text) {
 function begin(label, title) {
   running = true;
   for (const id of BUTTONS) el(id).disabled = true;
+  lockLibrary(true);
 
   rows = new Map();
   counts = { fetched: 0, skipped: 0, checked: 0, images: 0, missing: 0, bytes: 0 };
@@ -68,6 +72,26 @@ function begin(label, title) {
 function finish() {
   running = false;
   for (const id of BUTTONS) el(id).disabled = false;
+  lockLibrary(false);
+  // A run can add a work or change its counts, so the shelf should not lie.
+  // Only the folder that was actually read is re-read: a typed path the user
+  // has not refreshed yet is not a reason to replace what is on screen.
+  if (libraryRoot && el("library-dir").value.trim() === libraryRoot) refreshLibrary(libraryRoot);
+}
+
+/** Library buttons belong to the same one-job-at-a-time rule. */
+function lockLibrary(locked) {
+  for (const button of el("library-list").querySelectorAll("button")) {
+    if (locked) {
+      // Remember what the row itself decided: a broken manifest's Update and
+      // Export were already disabled, and must be again when the run ends.
+      button.dataset.wasDisabled = button.disabled ? "1" : "";
+      button.disabled = true;
+    } else {
+      button.disabled = button.dataset.wasDisabled === "1";
+      delete button.dataset.wasDisabled;
+    }
+  }
 }
 
 function liveCounts() {
@@ -298,13 +322,12 @@ el("update").addEventListener("click", () => {
   );
 });
 
-el("export").addEventListener("click", async () => {
+/** Export one folder, wherever the ask came from. */
+async function exportFolder(dir) {
   if (running) return;
   begin("exporting", "exporting");
   try {
-    const written = await invoke("export", {
-      request: { dir: el("dir").value, ...settings() },
-    });
+    const written = await invoke("export", { request: { dir, ...settings() } });
     const box = el("summary");
     box.replaceChildren();
     if (!written.length) box.append(paragraph(null, "Nothing to write."));
@@ -322,7 +345,9 @@ el("export").addEventListener("click", async () => {
   } finally {
     finish();
   }
-});
+}
+
+el("export").addEventListener("click", () => exportFolder(el("dir").value));
 
 el("describe").addEventListener("click", async () => {
   if (running) return;
@@ -525,9 +550,180 @@ el("session-save-header").addEventListener("click", async () => {
   }
 });
 
+// ------------------------------------------------------------------- library
+
+function libraryStatus(text, kind) {
+  const line = el("library-status");
+  line.textContent = text;
+  line.className = kind || "hint";
+}
+
+/** The one line under a work's title. */
+function libraryMeta(item) {
+  const parts = [];
+  if (item.author) parts.push(item.author);
+  parts.push(`${item.chapters} chapter${item.chapters === 1 ? "" : "s"}`);
+  if (item.images) parts.push(`${item.images} image${item.images === 1 ? "" : "s"}`);
+  if (item.rating === "adult") parts.push("adult");
+  if (item.fetchedAt) {
+    const when = new Date(item.fetchedAt);
+    if (!Number.isNaN(when.getTime())) parts.push(`fetched ${when.toLocaleDateString()}`);
+  }
+  return parts.join(" · ");
+}
+
+function libraryActions(item) {
+  const actions = node("div", "actions");
+  const buttons = [];
+
+  const open = node("button", "quiet", "Open");
+  open.type = "button";
+  open.addEventListener("click", async () => {
+    try {
+      await invoke("open_path", { path: item.outputDir });
+    } catch (error) {
+      libraryStatus(String(error), "error");
+    }
+  });
+  buttons.push(open);
+
+  const update = node("button", null, "Update");
+  update.type = "button";
+  update.disabled = Boolean(item.problem);
+  update.addEventListener("click", () => {
+    start(
+      "update",
+      "updating",
+      { dir: item.outputDir, check: el("check").checked, ...settings() },
+      item.title,
+    );
+  });
+  buttons.push(update);
+
+  const write = node("button", null, "Export");
+  write.type = "button";
+  write.disabled = Boolean(item.problem);
+  write.addEventListener("click", () => exportFolder(item.outputDir));
+  buttons.push(write);
+
+  if (item.removable) {
+    const remove = node("button", "quiet", "Remove");
+    remove.type = "button";
+    remove.addEventListener("click", () => {
+      if (running) return;
+      // Two steps, and the second names the work: no native dialog is needed,
+      // and nothing is removed without saying what.
+      actions.replaceChildren();
+      const sure = node("button", "danger", `Remove “${item.title}”?`);
+      sure.type = "button";
+      sure.title = "The folder goes to the system trash.";
+      sure.addEventListener("click", async () => {
+        if (running) return;
+        try {
+          await invoke("remove_novel", { root: libraryRoot, novel: item.outputDir });
+          await refreshLibrary(libraryRoot);
+          libraryStatus(`Moved “${item.title}” to the trash.`, "ok");
+        } catch (error) {
+          libraryStatus(String(error), "error");
+        }
+      });
+      const keep = node("button", "quiet", "Keep");
+      keep.type = "button";
+      keep.addEventListener("click", () => actions.replaceChildren(...buttons));
+      actions.append(sure, keep);
+    });
+    buttons.push(remove);
+  }
+
+  actions.append(...buttons);
+  return actions;
+}
+
+function renderLibrary() {
+  const list = el("library-list");
+  list.replaceChildren();
+  if (!libraryRoot) {
+    list.append(node("li", "empty", "Choose a folder to see the novels it holds."));
+    return;
+  }
+  if (!libraryItems.length) {
+    list.append(
+      node(
+        "li",
+        "empty",
+        "No novels here yet. A download into a folder in this one puts the first work here.",
+      ),
+    );
+    return;
+  }
+  for (const item of libraryItems) {
+    const row = node("li");
+    const work = node("div", "work");
+    work.append(node("span", "title", item.title));
+    work.append(node("div", "meta", libraryMeta(item)));
+    if (item.problem) work.append(node("div", "problem", `manifest: ${item.problem}`));
+    work.append(node("div", "path", item.outputDir));
+    row.append(work, libraryActions(item));
+    list.append(row);
+  }
+}
+
+/** Read a library folder; the argument is the folder the caller means. */
+let libraryReads = 0;
+
+async function refreshLibrary(root = el("library-dir").value.trim()) {
+  const read = ++libraryReads;
+  libraryRoot = root;
+  if (!root) {
+    libraryItems = [];
+    libraryStatus("");
+    renderLibrary();
+    return;
+  }
+  try {
+    const items = await invoke("library", { root });
+    // A slower read must not put an older shelf back over a newer one.
+    if (read !== libraryReads) return;
+    libraryItems = items;
+    renderLibrary();
+    libraryStatus(items.length === 1 ? "1 novel" : `${items.length} novels`, "");
+  } catch (error) {
+    if (read !== libraryReads) return;
+    libraryItems = [];
+    el("library-list").replaceChildren();
+    libraryStatus(String(error), "error");
+  }
+}
+
+el("library-browse").addEventListener("click", async () => {
+  const folder = await invoke("pick_directory");
+  if (!folder) return;
+  el("library-dir").value = folder;
+  await refreshLibrary();
+});
+
+el("library-refresh").addEventListener("click", () => refreshLibrary());
+
+el("library-use-save").addEventListener("click", async () => {
+  const save = el("dir").value.trim();
+  if (!save) {
+    libraryStatus("Choose the save folder first.", "error");
+    return;
+  }
+  el("library-dir").value = save;
+  await refreshLibrary();
+});
+
+el("library-dir").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  refreshLibrary();
+});
+
 async function main() {
   await listen(EVENT, (event) => onEvent(event.payload));
   await loadSessions();
+  await refreshLibrary();
 
   // A job started before this window loaded is still its own.
   const busy = await invoke("status");

@@ -46,6 +46,8 @@
     "manage-sessions", "sessions-dialog", "session-list", "sessions-status",
     "session-name", "session-file", "session-browse", "session-save-file",
     "session-host", "session-header", "session-save-header", "sessions-close",
+    "library-dir", "library-browse", "library-refresh", "library-use-save",
+    "library-status", "library-list",
   ];
   const missing = wanted.filter((id) => el(id) === null);
   check(`no element is missing from the page (${missing.join(",") || "none"})`, missing.length === 0);
@@ -68,7 +70,35 @@
     listed[0].textContent.includes("example.com") && listed[0].textContent.includes("2 cookies"),
   );
 
-  // 3. The render path, driven with the payloads a job emits.
+  // 3. The library: a row is a work, with what it holds and what it can do.
+  libraryRoot = "C:\\Novels";
+  libraryItems = [
+    {
+      title: "A made-up work",
+      author: "Someone",
+      chapters: 12,
+      images: 2,
+      rating: "general",
+      fetchedAt: "2026-01-02T03:04:05Z",
+      outputDir: "C:\\Novels\\A made-up work",
+      removable: true,
+      problem: null,
+    },
+  ];
+  renderLibrary();
+  const works = el("library-list").children;
+  check("the library lists a work", works.length === 1);
+  check(
+    "the library names its work and offers its actions",
+    works[0].textContent.includes("A made-up work") &&
+      works[0].querySelectorAll("button").length === 4,
+  );
+  // Leave no fake root behind: the real run below would try to read it.
+  libraryItems = [];
+  libraryRoot = "";
+  renderLibrary();
+
+  // 4. The render path, driven with the payloads a job emits.
   handler({ kind: "planned", title: "自", chapters: 11, toFetch: 11 });
   check("planned names the novel", el("output-title").textContent === "自");
 
@@ -111,7 +141,7 @@
   check("an adult work is said to be one", summary.includes("adult"));
   check("the buttons come back", el("download").disabled === false);
 
-  // 4. The real thing: a real novel, through the real commands, on the real
+  // 5. The real thing: a real novel, through the real commands, on the real
   //    channel — and then an export decided by the payload the job sent.
   const finished = new Promise((resolve, reject) => {
     listen(channel, (event) => {

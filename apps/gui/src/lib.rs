@@ -163,6 +163,38 @@ fn forget_session(name: String) -> Result<(), String> {
     job::forget_session(&name)
 }
 
+/// The novels a library folder holds.
+#[tauri::command]
+fn library(root: String) -> Result<Vec<job::LibraryItem>, String> {
+    job::library(Path::new(&root))
+}
+
+/// Move a novel to the operating system's trash.
+///
+/// `job::removal_target` has already decided that the path is a novel and a
+/// direct child of the library folder; this only performs the move.
+#[tauri::command]
+async fn remove_novel(root: String, novel: String) -> Result<(), String> {
+    let target = job::removal_target(Path::new(&root), Path::new(&novel))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        trash::delete(&target)
+            .map_err(|error| format!("could not move {} to the trash: {error}", target.display()))
+    })
+    .await
+    .map_err(|error| format!("the removal did not finish: {error}"))?
+}
+
+/// Open a folder or a file with the desktop's default application.
+#[tauri::command]
+fn open_path(path: String) -> Result<(), String> {
+    let (program, args) = job::open_command(Path::new(&path))?;
+    std::process::Command::new(&program)
+        .args(&args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("could not run {program}: {error}"))
+}
+
 /// What is running, if anything.
 ///
 /// A window that has just loaded asks: a job started before a reload is still
@@ -222,7 +254,10 @@ pub fn run() {
             download,
             update,
             export,
-            info
+            info,
+            library,
+            remove_novel,
+            open_path
         ])
         .run(tauri::generate_context!())
         .expect("the app could not start");

@@ -14,6 +14,7 @@ use serde_json::json;
 use wnd_core::ContentRating;
 use wnd_core::session::cookie::Cookie;
 use wnd_core::session::{Session, SessionStore};
+use wnd_core::store::model::{ChapterMeta, Manifest, SourceInfo};
 use wnd_download::Progress;
 use wnd_gui::job::{self, DownloadRequest, Event, ExportRequest, Settings, UpdateRequest};
 use wnd_sources::Source;
@@ -604,4 +605,205 @@ fn a_broken_export_does_not_echo_a_cookie_value() {
         !error.contains("hunter2"),
         "a value must not travel in an error: {error}"
     );
+}
+
+// ------------------------------------------------------------------ library
+
+/// A downloaded novel, as the library finds it: a folder and its manifest.
+fn write_novel(dir: &Path, title: &str, chapters: usize) {
+    let mut manifest = Manifest::new(
+        SourceInfo {
+            id: "fake".to_string(),
+            novel_url: "https://fake.example/novel/1".to_string(),
+            site_title: None,
+        },
+        title,
+        "ja",
+    );
+    manifest.author = Some("Someone".to_string());
+    manifest.fetched_at = Some("2026-01-02T03:04:05Z".to_string());
+    manifest.chapters = (1..=chapters)
+        .map(|index| ChapterMeta {
+            index: index as u32,
+            title: format!("Chapter {index}"),
+            url: format!("https://fake.example/novel/1/{index}"),
+            arc: None,
+            published_at: None,
+            revised_at: None,
+            hash: None,
+            file: format!("chapters/{index:04}.json"),
+        })
+        .collect();
+    std::fs::create_dir_all(dir).expect("the novel folder");
+    std::fs::write(
+        dir.join("manifest.json"),
+        serde_json::to_vec_pretty(&manifest).expect("a manifest"),
+    )
+    .expect("the manifest file");
+}
+
+#[test]
+fn a_library_lists_the_novels_under_a_root() {
+    let dir = TempDir::new("library");
+    let root = dir.path();
+    write_novel(&root.join("b work"), "b work", 2);
+    write_novel(&root.join("A work"), "A work", 1);
+
+    // Not novels: a folder with no manifest, and a loose file.
+    std::fs::create_dir_all(root.join("not a novel")).expect("a plain folder");
+    std::fs::write(root.join("loose.txt"), "nothing").expect("a loose file");
+
+    let items = job::library(root).expect("a library");
+    let titles: Vec<&str> = items.iter().map(|item| item.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        ["A work", "b work"],
+        "sorted by title, and what is not a novel is skipped"
+    );
+
+    assert_eq!(items[0].author.as_deref(), Some("Someone"));
+    assert_eq!(items[0].chapters, 1);
+    assert_eq!(items[0].images, 0);
+    assert_eq!(items[0].rating, Some(ContentRating::General));
+    assert_eq!(items[0].fetched_at.as_deref(), Some("2026-01-02T03:04:05Z"));
+    assert_eq!(
+        items[0].output_dir,
+        root.join("A work").display().to_string()
+    );
+    assert!(items[0].removable);
+    assert_eq!(items[0].problem, None);
+
+    // The wire the window reads: camelCase, and a broken row can say so.
+    let shape = serde_json::to_value(&items[0]).expect("a library row serializes");
+    assert_eq!(shape["title"], "A work");
+    assert_eq!(shape["chapters"], 1);
+    assert_eq!(shape["rating"], "general");
+    assert_eq!(shape["fetchedAt"], "2026-01-02T03:04:05Z");
+    assert_eq!(shape["removable"], true);
+    assert_eq!(shape["outputDir"], items[0].output_dir);
+    assert!(shape["problem"].is_null());
+}
+
+#[test]
+fn the_library_root_itself_can_be_a_novel() {
+    let dir = TempDir::new("library-root");
+    write_novel(dir.path(), "Only work", 3);
+
+    let items = job::library(dir.path()).expect("a library");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "Only work");
+    assert_eq!(items[0].chapters, 3);
+    assert!(
+        !items[0].removable,
+        "the library folder is never one of its own works to remove"
+    );
+}
+
+#[test]
+fn a_broken_manifest_is_listed_as_a_problem() {
+    let dir = TempDir::new("library-broken");
+    let root = dir.path();
+    let broken = root.join("half a novel");
+    std::fs::create_dir_all(&broken).expect("the folder");
+    std::fs::write(broken.join("manifest.json"), "{ not json").expect("a broken manifest");
+
+    let items = job::library(root).expect("a library");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "half a novel", "the folder is what is left");
+    assert_eq!(items[0].chapters, 0);
+    assert_eq!(items[0].rating, None);
+    assert!(
+        items[0].problem.is_some(),
+        "the row says what is wrong instead of hiding the folder"
+    );
+    assert!(items[0].removable, "a broken folder is still removable");
+}
+
+#[test]
+fn an_empty_library_is_empty() {
+    let dir = TempDir::new("library-empty");
+    assert!(job::library(dir.path()).expect("a library").is_empty());
+}
+
+#[test]
+fn a_folder_that_is_not_there_is_an_error() {
+    let dir = TempDir::new("library-missing");
+    let root = dir.path().join("not here");
+
+    let error = job::library(&root).expect_err("a folder that is not there");
+    assert!(error.contains("not here"), "{error}");
+
+    let error = job::library(Path::new("")).expect_err("no folder at all");
+    assert!(error.contains("choose"), "{error}");
+}
+
+#[test]
+fn removal_would_take_a_novel_in_the_library() {
+    let dir = TempDir::new("library-remove");
+    let root = dir.path();
+    let novel = root.join("A work");
+    write_novel(&novel, "A work", 1);
+
+    let target = job::removal_target(root, &novel).expect("a novel in the library");
+    assert_eq!(
+        target, novel,
+        "the path the window shows is the path removed"
+    );
+    assert!(novel.exists(), "deciding is not deleting");
+
+    // A broken manifest is still a novel folder: the library lists it, so
+    // removing it must be possible.
+    std::fs::write(novel.join("manifest.json"), "{ not json").expect("a broken manifest");
+    job::removal_target(root, &novel).expect("a broken folder is still removable");
+}
+
+#[test]
+fn removal_refuses_anything_that_is_not_a_novel_in_the_library() {
+    let dir = TempDir::new("library-refuse");
+    let root = dir.path();
+    let novel = root.join("A work");
+    write_novel(&novel, "A work", 1);
+
+    let plain = root.join("plain folder");
+    std::fs::create_dir_all(&plain).expect("a plain folder");
+    let error = job::removal_target(root, &plain).expect_err("a folder with no manifest");
+    assert!(error.contains("manifest"), "{error}");
+
+    // The root itself is a novel here, and still not removable: the window
+    // would otherwise delete the library it is showing.
+    write_novel(root, "Root", 1);
+    let error = job::removal_target(root, root).expect_err("the library folder itself");
+    assert!(error.contains("library folder"), "{error}");
+
+    let outside = TempDir::new("library-outside");
+    write_novel(outside.path(), "Outside", 1);
+    let error = job::removal_target(root, outside.path()).expect_err("a novel from elsewhere");
+    assert!(error.contains("directly inside"), "{error}");
+
+    let missing = root.join("gone");
+    let error = job::removal_target(root, &missing).expect_err("a folder that is not there");
+    assert!(error.contains("gone"), "{error}");
+}
+
+#[test]
+fn opening_names_the_platforms_own_program() {
+    let dir = TempDir::new("library-open");
+    let (program, args) = job::open_command(dir.path()).expect("a folder that is there");
+
+    #[cfg(target_os = "windows")]
+    assert_eq!(program, "explorer");
+    #[cfg(target_os = "macos")]
+    assert_eq!(program, "open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    assert_eq!(program, "xdg-open");
+
+    assert_eq!(
+        args.last(),
+        Some(&dir.path().display().to_string()),
+        "the folder is the argument"
+    );
+
+    let missing = dir.path().join("gone");
+    let error = job::open_command(&missing).expect_err("a folder that is not there");
+    assert!(error.contains("gone"), "{error}");
 }
