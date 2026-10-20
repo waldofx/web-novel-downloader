@@ -2,12 +2,14 @@
 
 A desktop app for the same job the command line does, for people who would
 rather not open a terminal. Paste a novel's address, choose a folder, press
-**Download**, and watch the chapters arrive.
+**Download**, and watch the chapters arrive. The **Library** at the top of the
+window lists the novels already in a folder you keep them in.
 
-Everything the window does, [`nvd`](getting-started.md) does too. Nothing is
-hidden behind it: the app writes exactly the same folder, with the same
-`manifest.json`, the same chapters, the same illustrations and the same exports.
-Use whichever you prefer, on the same folder, at different times.
+Everything the window *writes*, [`nvd`](getting-started.md) writes too. Nothing is
+hidden behind it: the same folder, the same `manifest.json`, the same chapters,
+the same illustrations and the same exports. Use whichever you prefer, on the
+same folder, at different times. The library is only a way of looking at those
+folders; the command line has no shelf, and does not need one.
 
 ## Starting it
 
@@ -25,7 +27,8 @@ There is no installer yet. Build it and run the binary.
 
 ## What it looks like
 
-One page, one panel of settings, and a list that fills as the work arrives.
+One page: a library at the top, a panel of settings, and a list that fills as
+the work arrives.
 
 - **Novel URL** — any address into a work: its table of contents, a chapter, or
   a series. The whole work is downloaded either way. A missing `https://` is
@@ -59,6 +62,36 @@ The four buttons:
 | **Export** | writes the ticked exports again from what is already saved |
 | **Describe folder** | says what a folder holds, and what it has lost, without fetching anything |
 
+## The library
+
+The panel at the top is a shelf. Point it at a folder that holds your novels —
+one folder per work, each with a `manifest.json`, which is exactly what a
+download writes — and it lists them: the author, the chapter and picture counts,
+the rating, and when each was last fetched. The folder itself is listed too when
+it is a novel, which is what **Use the save folder** shows you.
+
+A download writes straight into the folder named in **Save into**, not into a
+subfolder of it. To build a shelf, keep each work in its own folder under one
+parent, then point the library at the parent.
+
+Each work has four actions:
+
+| Button | What it does |
+| --- | --- |
+| **Open** | opens the work's folder in your file manager |
+| **Update** | fetches what the site has added since, into that folder |
+| **Export** | writes the formats ticked in the form below, from what is already saved |
+| **Remove** | moves the folder to the system trash |
+
+**Remove** asks twice, and the second button names the work. It goes to the
+trash, so it can be brought back. The window offers it only for a folder directly
+inside the library folder that holds a `manifest.json`, and never for the library
+folder itself. A folder whose manifest cannot be read still appears, with the
+problem on its row, so it can be opened or removed instead of silently vanishing.
+
+The library reads the folder and its direct children, not the whole disk. A plain
+folder with no manifest is not a novel and is not listed.
+
 ## While it runs
 
 The list fills with one line per chapter as it is saved, whether the chapter was
@@ -84,8 +117,12 @@ the download again picks up where it stopped.
 - **It never refuses a work because of its rating.** A rating, when the site
   publishes one, is shown in the report — an adult work downloads like any
   other, and each site's own age gate still applies.
-- **It does not open the folder for you**, or show you a picture before it is
-  downloaded. The folder is yours to open in your file manager.
+- **It does not edit a chapter or a work's details.** The folder and its exports
+  are the record, and the hashes in `manifest.json` are what an **Update**
+  trusts; changing the words in the window would break them. Edit the page on the
+  site, then update.
+- **It does not show you a picture before it is downloaded.** Open the folder if
+  you want to look inside it now.
 
 ## The folder it writes
 

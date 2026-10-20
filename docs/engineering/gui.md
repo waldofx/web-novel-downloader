@@ -2,19 +2,21 @@
 
 `apps/gui` — a window over the same library the command line uses, so that a
 reader never has to open a terminal. Paste a novel's address, choose a folder,
-watch the chapters arrive, and take an EPUB away.
+watch the chapters arrive, and take an EPUB away; or point the library at the
+folder that holds what you already downloaded and work from there.
 
-It is deliberately the **thinnest possible layer**. Everything it does, `nvd`
-already does; the app adds a window, a live list, a folder picker, and a session
-manager. Nothing in `wnd-core`, `wnd-sources`, `wnd-download` or `wnd-export`
+It is deliberately the **thinnest possible layer**. Every *job* it does —
+download, update, export, describe — `nvd` already does; the app adds a window, a
+live list, a folder picker, a shelf over the folders already on disk, and a
+session manager. Nothing in `wnd-core`, `wnd-sources`, `wnd-download` or `wnd-export`
 knows it exists.
 
 ## Three layers
 
 | File | Holds | Tested by |
 | --- | --- | --- |
-| `src/job.rs` | what the window *does*: the request types, the event types, the report, validation, the session store, and calls into `wnd-download`/`wnd-export` | `src/job.rs` unit tests, `tests/job.rs` |
-| `src/lib.rs` | the Tauri commands, the one-job rule, the thread, and the event channel | `src/lib.rs` unit tests |
+| `src/job.rs` | what the window *does*: the request types, the event types, the report, validation, the library scan and removal guard, the session store, and calls into `wnd-download`/`wnd-export` | `src/job.rs` unit tests, `tests/job.rs` |
+| `src/lib.rs` | the Tauri commands, the one-job rule, the thread, the event channel, and the two OS actions (open, trash) | `src/lib.rs` unit tests |
 | `ui/` | `index.html`, `style.css`, `app.js` — plain files, no npm, no framework | `tests/ui.rs` |
 
 `job.rs` has **no Tauri types in it at all**. That is the point: the interesting
@@ -98,11 +100,50 @@ summaries, and the header box is cleared the moment it is saved. The window also
 never sets a site's age cookie — the user's session is their own decision, and
 the site's gate stays the site's.
 
+## The library, from the window
+
+The panel at the top of the page is a shelf over a folder the user chooses: the
+folder itself and its direct children, each recognised by a `manifest.json`.
+
+- `job::library(root)` reads only the manifests. The title, author, counts,
+  rating and `fetched_at` come from the index, not from walking chapters, so a
+  shelf of long works is still one read per work. A folder without a manifest is
+  not a novel and is skipped; one whose manifest cannot be read is returned with
+  `problem` set, so it can be opened and removed instead of silently
+  disappearing. A missing root is an error sentence, not an empty shelf.
+- The root item has `removable: false`. **Use the save folder** may point the
+  shelf at a single novel — a download writes into the folder it is given — and
+  the window must not offer to delete the shelf it is showing.
+- `job::removal_target(root, novel)` is the whole safety of **Remove**. It
+  canonicalises both paths and accepts only a direct child of the root that holds
+  a `manifest.json`; the root itself, a folder outside it, a nested folder and a
+  folder with no manifest are each refused with a sentence. It is a decision
+  separate from the deletion so that every refusal is a test with no trash
+  involved.
+- `lib.rs` then hands the accepted path to `trash::delete` on a blocking thread.
+  The OS decides where its trash is — Recycle Bin, Trash, XDG trash — and a
+  failure is reported; there is no permanent-delete fallback.
+- `job::open_command(path)` names the platform's own opener — `explorer`,
+  `open`, `xdg-open` — and `lib.rs` spawns it. A folder opens in the file
+  manager and a file in its default application, so a later "open the EPUB" is
+  one button and no new mechanism.
+- The row actions reuse the existing jobs: **Update** calls `start("update", …)`
+  with the item's folder, **Export** calls `exportFolder(item.outputDir)`, both
+  with the session and formats chosen in the form. A broken row cannot update or
+  export. The one-job rule disables the library's buttons along with the form's.
+- **Remove** is two buttons, the second naming the work — the same decision as
+  the session manager, for the same reason: a native confirm cannot be clicked by
+  a test or styled by the page.
+
 ## What the app does *not* offer
 
 - **`--no-robots`.** The flag exists on the command line, said out loud and once.
   A checkbox that quietly asks a site to be treated worse is a worse default than
   a flag, so the app always respects `robots.txt`.
+- **Editing a chapter or a work's metadata.** The window manages the *folders*,
+  not the prose. The manifest's hashes are what `update` trusts; an editor in the
+  window would need its own hash and export story, and the site is the place to
+  fix a typo. See [format.md](format.md).
 - **Packaging.** `cargo build -p wnd-gui` produces the binary; wiring
   `tauri build` into an installer is not done, and `bundle.active` is `false`.
 
@@ -126,6 +167,13 @@ the site's gate stays the site's.
   cannot be asynchronous. It is the same crate Tauri's own dialog plugin wraps,
   without the plugin and its permission, and `set_parent` takes the window itself,
   since Tauri's `Window` implements both handle traits.
+- `trash` is a direct dependency for one call. It runs on
+  `tauri::async_runtime::spawn_blocking`, because moving a large folder across
+  filesystems to the trash can copy, and the window must not freeze while it
+  does. `job::removal_target` has already decided *what* may be removed.
+- `open_path` spawns the program `job::open_command` names and does not wait for
+  it. `explorer` returns immediately even when it hands the request to a running
+  process.
 
 ## Running it
 
@@ -149,7 +197,9 @@ cargo test -p wnd-gui
 - `tests/job.rs` — a URL without a scheme, validation before a thread starts, the
   exact shape of every event, a download over an in-memory adapter, resume, an
   update with and without "check for changes", `info` counting what a folder has
-  and what it has lost, and the session picker and manager: saving from a file
+  and what it has lost, the library (the root and its children, a broken manifest
+  as a row, a plain folder skipped, a missing root, every removal refusal, the
+  platform's opener), and the session picker and manager: saving from a file
   and from a header, a pasted address reduced to a host, replace-on-same-name,
   forget, every refusal — and that a cookie value never reaches the wire.
 - `src/job.rs` — the request JSON as the window sends it: camelCase, the options
@@ -166,6 +216,8 @@ cargo test -p wnd-gui
 Two things are knowingly *not* covered by a committed test. The folder dialog is
 an operating-system modal no test can click, called by one line in `lib.rs`. The
 click handlers are `addEventListener` plus code the tests above cover, but the
-click itself is not something a Rust test can perform. What *was* checked by
-hand, once, in the real window, is the whole loop — see
+click itself is not something a Rust test can perform — and the two actions that
+leave the process, **Open** and **Remove**, are an OS spawn and a trash call
+whose *decision* is tested but whose effect only a real window shows. What *was*
+checked by hand, once, in the real window, is the whole loop — see
 [testing.md](testing.md#the-desktop-app-one-manual-check).
