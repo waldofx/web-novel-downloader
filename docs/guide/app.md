@@ -35,8 +35,10 @@ One page, one panel of settings, and a list that fills as the work arrives.
   land directly in it. Choosing the same folder again resumes it and fetches
   only what is missing.
 - **Session** — for a site that asks for a cookie. The list is whatever you have
-  already saved; making one is the command line's job (`nvd session save`, see
-  [sessions](sessions.md)). A session is only ever sent to the hosts it names.
+  saved, and **Manage…** beside it adds one from a `cookies.txt` or a pasted
+  `Cookie:` header, shows what each holds, and forgets one. The command line can
+  do the same (`nvd session save`, see [sessions](sessions.md)). A session is
+  only ever sent to the hosts it names.
 - **At most how many chapters** — blank means all of them, from the first.
 - **Fetch every chapter again** — ignore what is already saved. Rarely what you
   want: running the same download twice already fetches only what is missing.
@@ -82,8 +84,6 @@ the download again picks up where it stopped.
 - **It never refuses a work because of its rating.** A rating, when the site
   publishes one, is shown in the report — an adult work downloads like any
   other, and each site's own age gate still applies.
-- **It does not make sessions**, only use them: that needs your browser's
-  cookies exported to a file first.
 - **It does not open the folder for you**, or show you a picture before it is
   downloaded. The folder is yours to open in your file manager.
 

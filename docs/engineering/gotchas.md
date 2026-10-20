@@ -174,3 +174,9 @@ version away from coming back, and the next person will search for the *symptom*
 | An update erased the recorded cover image | a cover is a path to a file **in the directory**, which no index can describe, so the fresh manifest has none | Preserve what the index cannot produce (`cover`) instead of overwriting it with silence |
 | A scheduled `nvd update` exits `0` on every run, about a picture that has been missing for weeks | an image that cannot be fetched is reported, and reporting it as news would make the exit code mean nothing | `up_to_date` counts chapters fetched, images fetched and chapters removed — never images *missing*. A broken link repeats its warning; it does not claim there is something new |
 | A picture was fetched again although the manifest records it | only the manifest was consulted, never the file | An image is present when the file **hashes to what was recorded**, exactly as for a chapter. A file that exists but does not match is fetched again |
+
+## The window
+
+| Symptom | Cause | Fix / workaround |
+| --- | --- | --- |
+| Clicking **Save session** in the app starts a download instead | the dialog sat inside the page's one `<form>`, and a `<button>` with no `type` defaults to `submit` | Keep dialogs outside any `<form>` — the session dialog is a child of `<body>`, after `<main>` — and give every button that is not a submit `type="button"`. `tests/ui.rs` checks ids and commands, not button types, so nothing else would catch it |

@@ -211,9 +211,9 @@ it and nothing here has to be the only way in. Internal storage is our own JSON.
 
 ### How to remove them by hand
 
-Delete the files under the directory above, or `nvd session delete <name>`. The
-directory itself is created on the first save; if it does not exist, there are
-no sessions. Nothing is stored anywhere else.
+Delete the files under the directory above, `nvd session delete <name>`, or
+**Forget** in the window. The directory itself is created on the first save; if
+it does not exist, there are no sessions. Nothing is stored anywhere else.
 
 ## Stance
 
