@@ -16,7 +16,7 @@ wanted. More sites come next — see the
 | `nvd update <dir>` | works |
 | `nvd export <dir> --format epub` | works |
 | `nvd info <dir>` | works |
-| `nvd session save/list/delete` | works (user-provided cookies for challenged sites) |
+| `nvd session save/list/delete` | works (user-provided cookies for challenged sites; the window's **Manage…** does the same) |
 | `nvd-app` (the window) | works |
 
 ## Build it

@@ -34,6 +34,25 @@ nvd session delete <name>           # forget one
 - `list` shows name, hosts, saved time and the earliest expiry. **Never a value.**
 - Delete the files by hand if you prefer.
 
+## From the window
+
+The app's **Session** row has a **Manage…** button, and that dialog is the whole
+store: every saved session with its sites, how many cookies it holds, when it
+was saved and when it expires.
+
+- **Add from a cookies file** — **Choose…** opens a file dialog for a
+  `cookies.txt`; the session keeps only the sites its cookies name.
+- **Add from a header** — paste the `Cookie:` value from your browser's
+  developer tools. The site is required: a host (`novel18.syosetu.com`) or the
+  page address you copied it from; an address is reduced to its host.
+- **Forget** takes two clicks; the second button names the session.
+- Saving an existing name again is how you refresh one.
+- The dialog shows what a session holds, **never the values**, and the header
+  box is cleared as soon as it is saved.
+
+The window and `nvd session save` write the same store, so each sees what the
+other made.
+
 ## Use it
 
 ```

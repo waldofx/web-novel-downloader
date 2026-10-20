@@ -186,7 +186,8 @@ its own age gate.
 
 Most works read without a session. A work the account may not read comes back
 with `isLoginOnly: true` and an empty body, and the adapter says so and points at
-`nvd session save` rather than writing an empty chapter.
+`nvd session save` (or the window's **Manage…**) rather than writing an empty
+chapter.
 
 ### Politeness
 

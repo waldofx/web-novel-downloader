@@ -60,9 +60,9 @@ Both. `cargo run -p wnd-gui` starts a small desktop app over exactly the same
 library: paste the URL, choose a folder, press **Download**, and watch the
 chapters arrive. It writes the same folder `nvd` writes — use either one, on the
 same folder, at different times. The app always respects `robots.txt` and never
-refuses a work because of its rating. It does not *create* sessions (that is
-`nvd session save`), and it cannot cancel a run already started. See
-[the window](app.md).
+refuses a work because of its rating. It can add and forget sessions too
+(**Manage…** beside the session list), and it cannot cancel a run already
+started. See [the window](app.md).
 
 ### Why is it so slow?
 
@@ -139,14 +139,16 @@ browser, you can hand over what the browser obtained.
    clearance cookie.
 2. Export the cookies for that site in **Netscape `cookies.txt`** format — every
    cookie-export extension writes this, and `curl -b` reads it.
-3. Save them: `nvd session save pixiv cookies.txt`
+3. Save them: `nvd session save pixiv cookies.txt` — or press **Manage…**
+   beside the session list in the window and choose the file there.
 4. Use them: `nvd download <url> --session pixiv`
 
 The session is stored under your own data directory, one file per name, `0600`
 on Unix, and is never logged or committed. `nvd session list` shows name, hosts,
 saved time and the earliest expiry — never a cookie value. `nvd session delete
-pixiv` forgets it, or delete the files by hand. If a download still gets the
-challenge, the session probably expired: re-export and save again.
+pixiv` forgets it, or **Forget** in the window, or delete the files by hand. If a
+download still gets the challenge, the session probably expired: re-export and
+save again.
 
 ### Why does a filtered site hang instead of saying so?
 

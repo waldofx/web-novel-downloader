@@ -5,14 +5,15 @@ reader never has to open a terminal. Paste a novel's address, choose a folder,
 watch the chapters arrive, and take an EPUB away.
 
 It is deliberately the **thinnest possible layer**. Everything it does, `nvd`
-already does; the app adds a window, a live list, and a folder picker. Nothing
-in `wnd-core`, `wnd-sources`, `wnd-download` or `wnd-export` knows it exists.
+already does; the app adds a window, a live list, a folder picker, and a session
+manager. Nothing in `wnd-core`, `wnd-sources`, `wnd-download` or `wnd-export`
+knows it exists.
 
 ## Three layers
 
 | File | Holds | Tested by |
 | --- | --- | --- |
-| `src/job.rs` | what the window *does*: the request types, the event types, the report, validation, and calls into `wnd-download`/`wnd-export` | `src/job.rs` unit tests, `tests/job.rs` |
+| `src/job.rs` | what the window *does*: the request types, the event types, the report, validation, the session store, and calls into `wnd-download`/`wnd-export` | `src/job.rs` unit tests, `tests/job.rs` |
 | `src/lib.rs` | the Tauri commands, the one-job rule, the thread, and the event channel | `src/lib.rs` unit tests |
 | `ui/` | `index.html`, `style.css`, `app.js` — plain files, no npm, no framework | `tests/ui.rs` |
 
@@ -71,16 +72,37 @@ refused on it — the same rule as the command line, where the adult gate was
 removed on purpose. Each site enforces its own age gate; the tool does not
 bypass it, and a checkbox in a window would suggest otherwise.
 
+## Sessions, from the window
+
+The **Session** row carries a **Manage…** dialog. It lists what the store holds
+as `SessionInfo` — name, hosts, cookie count, saved-at, earliest expiry — with
+**Add** and **Forget**.
+
+- **Add from a file**: `pick_cookies_file` is the `rfd` sibling of
+  `pick_directory`, and `job::save_session_file_in` reads the Netscape export a
+  browser extension wrote.
+- **Add from a header**: name, site, and the `Cookie:` value. The site may be a
+  host or a pasted address; `host_from_input` keeps the host, because a cookie
+  domain has to be one. `job::save_session_header_in` then scopes the jar to
+  that site alone.
+- **Forget** is two buttons: the second names the session. A native confirm is
+  not something this code depends on inside a webview, and a test could not click
+  one anyway.
+- A name already in the store is replaced, which is the refresh gesture the CLI
+  has.
+- A blank name, an empty export, an empty header, and a missing file are errors
+  the dialog shows in place — never a panic, never a silent no-op.
+
+The core's rule holds here unchanged: no value is ever rendered. The list is
+summaries, and the header box is cleared the moment it is saved. The window also
+never sets a site's age cookie — the user's session is their own decision, and
+the site's gate stays the site's.
+
 ## What the app does *not* offer
 
 - **`--no-robots`.** The flag exists on the command line, said out loud and once.
   A checkbox that quietly asks a site to be treated worse is a worse default than
   a flag, so the app always respects `robots.txt`.
-- **Creating a session.** The picker lists the sessions you have and sends the one
-  you choose to the hosts it names — the same per-host rule as `--session`
-  ([sessions.md](sessions.md)). *Making* one means exporting cookies from a
-  browser and importing a `cookies.txt`, which is a job for a file dialog and a
-  command, not a form: `nvd session save`.
 - **Packaging.** `cargo build -p wnd-gui` produces the binary; wiring
   `tauri build` into an installer is not done, and `bundle.active` is `false`.
 
@@ -127,8 +149,9 @@ cargo test -p wnd-gui
 - `tests/job.rs` — a URL without a scheme, validation before a thread starts, the
   exact shape of every event, a download over an in-memory adapter, resume, an
   update with and without "check for changes", `info` counting what a folder has
-  and what it has lost, and the session picker — including that a cookie value
-  never reaches it.
+  and what it has lost, and the session picker and manager: saving from a file
+  and from a header, a pasted address reduced to a host, replace-on-same-name,
+  forget, every refusal — and that a cookie value never reaches the wire.
 - `src/job.rs` — the request JSON as the window sends it: camelCase, the options
   spread next to the request's own fields, and what is assumed when a field is
   absent.

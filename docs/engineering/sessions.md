@@ -40,11 +40,11 @@ own JSON; the import format is not.
 
 ## The three operations
 
-| Operation | CLI | Desktop app (#21) |
+| Operation | CLI | Desktop app |
 | --- | --- | --- |
-| save | `nvd session save <name> <file>` (optional `--host`) | "Add session": paste, or pick a browser export |
-| list | `nvd session list` | a list with the same columns |
-| delete | `nvd session delete <name>` | "Forget" |
+| save | `nvd session save <name> <file>` (optional `--host`, or `--cookie` + `--host`) | **Manage… → Add**: a `cookies.txt`, or a pasted header and its site |
+| list | `nvd session list` | the same columns in the manager |
+| delete | `nvd session delete <name>` | **Forget**, in two steps |
 
 `save` with an existing name replaces it — that is the refresh gesture.
 `--session <name>` on `download` and `update` sends the jar only to the hosts it
@@ -62,15 +62,23 @@ names.
   expiry. No value reaches a log, an error message, or `Debug`.
 - **Per-user, per-session.** One file per name; concurrent saves of different
   names do not interfere.
+- **The window never sets an age cookie.** A session the user saves is the user's
+  own decision; the site's gate remains the site's, in the window as on the
+  command line.
 
 ## Where the code lives
 
 - `crates/core/src/session/cookie.rs` — what a cookie is, and where it may be
   sent (host, path, secure, expiry).
-- `crates/core/src/session/netscape.rs` — reading the `cookies.txt` export.
+- `crates/core/src/session/netscape.rs` — reading the `cookies.txt` export and a
+  raw `Cookie:` header.
 - `crates/core/src/session/store.rs` — `Session`, `SessionStore`, `default_dir`.
 - `HttpClient::with_session` — sending the jar.
 - `crates/cli/src/main.rs` — the `session` subcommand and `--session`.
+- `apps/gui/src/job.rs` — `save_session_file_in`, `save_session_header_in`,
+  `forget_session_in`, and `host_from_input` (an address becomes a host).
+- `apps/gui/ui/app.js` — the manager dialog: summaries only, and the header box
+  is cleared when it is saved.
 
 ## Tests
 
@@ -80,6 +88,8 @@ names.
   name safety, redaction) and `crates/core/tests/session_fetch.rs` (sending
   only to named hosts, blaming the session on a challenge).
 - CLI tests in `crates/cli/tests/cli.rs`.
+- GUI tests in `apps/gui/tests/job.rs`: saving from a file and from a header,
+  host normalisation, replace-on-same-name, forget, and every refusal.
 
 The ignored network tests are not affected: a session is a credential, not a
 network dependency.
