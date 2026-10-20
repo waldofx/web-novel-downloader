@@ -23,14 +23,12 @@ pub fn render(manifest: &Manifest, chapters: &[Chapter], options: &ExportOptions
     if let Some(author) = &manifest.author {
         let _ = writeln!(out, "\n*{}*", escape(author));
     }
-    if let Some(synopsis) = &manifest.synopsis {
-        // A synopsis arrives with its line structure, and a blank line in it is
-        // a paragraph break — so the lines are written as they are, rather than
-        // each being given its own separating blank line.
-        let _ = writeln!(out);
-        for line in synopsis.lines() {
-            let _ = writeln!(out, "{}", guard(&escape(line)));
-        }
+    if !manifest.synopsis.is_empty() {
+        // Blocks like any other body: a picture the author put among the lines
+        // keeps its place, and its path is rewritten like a chapter's. The last
+        // block's separating blank line belongs to the next section instead.
+        let synopsis = blocks(&manifest.synopsis, options);
+        let _ = write!(out, "\n{}", synopsis.trim_end());
     }
 
     let mut arc: Option<&str> = None;

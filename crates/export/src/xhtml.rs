@@ -64,8 +64,9 @@ pub fn inlines(nodes: &[Inline]) -> String {
 
 /// Inline content with its line structure kept.
 ///
-/// A synopsis arrives with newlines in it; in XHTML a newline is only whitespace,
-/// so it has to become a `<br />` or the lines would run together.
+/// A paragraph can carry a newline — the source put a `<br>` inside one — and in
+/// XHTML a newline is only whitespace, so it becomes a `<br />` or the lines run
+/// together.
 fn text_with_breaks(nodes: &[Inline]) -> String {
     inlines(nodes).replace('\n', "<br />\n")
 }

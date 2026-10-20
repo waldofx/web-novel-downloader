@@ -5,10 +5,14 @@
 //! the tests here assert that the serialized shape still matches what that
 //! document describes.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Version of the on-disk format. Bump when the shape changes incompatibly.
-pub const FORMAT_VERSION: u32 = 1;
+///
+/// 2: the synopsis became blocks, because a work page can put the author's
+/// pictures among its lines. A version-1 manifest holds it as a string, and is
+/// read as paragraphs.
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Whether a work is safe for general audiences or is adult content.
 ///
@@ -99,8 +103,19 @@ pub struct Manifest {
     pub content_rating: ContentRating,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub synopsis: Option<String>,
+    /// The author's description of the work, with the pictures they put in it.
+    ///
+    /// Blocks rather than text, for the reason a chapter is: a Hameln work page
+    /// puts the author's illustrations among the synopsis' lines, and a string
+    /// has nowhere to keep one. A site that states its synopsis as text gets
+    /// [`Block::paragraphs`], and a version-1 manifest's string is read the same
+    /// way.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "synopsis_blocks"
+    )]
+    pub synopsis: Vec<Block>,
     /// Path to the cover image, relative to the novel directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover: Option<String>,
@@ -143,7 +158,7 @@ impl Manifest {
             language: language.into(),
             content_rating: ContentRating::General,
             tags: Vec::new(),
-            synopsis: None,
+            synopsis: Vec::new(),
             cover: None,
             cover_url: None,
             catchphrase: None,
@@ -162,6 +177,29 @@ impl Manifest {
     pub fn image(&self, url: &str) -> Option<&StoredImage> {
         self.images.iter().find(|image| image.url == url)
     }
+}
+
+/// The stored synopsis, from either shape it has had.
+///
+/// Version 1 held the site's text, line breaks and all; version 2 holds blocks,
+/// because a work page can put a picture among the lines. An older file is
+/// readable by definition, so the string is read as the paragraphs it was
+/// written as ([`Block::paragraphs`]).
+fn synopsis_blocks<'de, D>(deserializer: D) -> Result<Vec<Block>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Stored {
+        Text(String),
+        Blocks(Vec<Block>),
+    }
+
+    Ok(match Stored::deserialize(deserializer)? {
+        Stored::Text(text) => Block::paragraphs(&text),
+        Stored::Blocks(blocks) => blocks,
+    })
 }
 
 /// A block-level element of chapter content.
@@ -189,6 +227,28 @@ pub enum Block {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         alt: Option<String>,
     },
+}
+
+impl Block {
+    /// Plain text as the blocks it is: one paragraph per line, blank lines
+    /// dropped.
+    ///
+    /// The model's paragraph is already a separator, so a blank line has nothing
+    /// left to say — which is how every site that states its synopsis as text
+    /// (Narou's summary, Kakuyomu's introduction, Pixiv's description) keeps its
+    /// line structure. Only ASCII padding is trimmed: U+3000 is the paragraph
+    /// indent, and that is content.
+    pub fn paragraphs(text: &str) -> Vec<Block> {
+        text.lines()
+            .map(str::trim_ascii)
+            .filter(|line| !line.is_empty())
+            .map(|line| Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: line.to_string(),
+                }],
+            })
+            .collect()
+    }
 }
 
 /// An inline element. Only [`Inline::Text`] carries prose to translate; every
@@ -299,7 +359,7 @@ mod tests {
         // The exact example from docs/engineering/format.md. If this stops
         // parsing, the docs and the code have drifted apart.
         let json = r#"{
-          "format_version": 1,
+          "format_version": 2,
           "index": 1,
           "title": "…",
           "nodes": [
@@ -451,14 +511,17 @@ mod tests {
         // The example from docs/engineering/format.md, images included. If this
         // stops parsing, the docs and the code have drifted apart.
         let json = r#"{
-          "format_version": 1,
+          "format_version": 2,
           "source": { "id": "narou", "novel_url": "https://ncode.syosetu.com/n0000aa/" },
           "title": "…",
           "author": "…",
           "language": "ja",
           "content_rating": "general",
           "tags": ["…"],
-          "synopsis": "…",
+          "synopsis": [
+            { "type": "paragraph", "children": [ { "type": "text", "value": "…" } ] },
+            { "type": "image", "src": "images/synopsis-1.png", "alt": "…" }
+          ],
           "cover": "images/cover.jpg",
           "cover_url": "https://example.test/cover.jpg",
           "fetched_at": "2026-10-17T00:00:00Z",
@@ -486,6 +549,19 @@ mod tests {
         let manifest: Manifest = serde_json::from_str(json).expect("documented shape must parse");
         assert_eq!(manifest.format_version, FORMAT_VERSION);
         assert_eq!(manifest.chapters.len(), 1);
+        assert_eq!(
+            manifest.synopsis,
+            vec![
+                Block::Paragraph {
+                    children: vec![text("…")]
+                },
+                Block::Image {
+                    src: "images/synopsis-1.png".to_string(),
+                    alt: Some("…".to_string()),
+                },
+            ],
+            "a synopsis is blocks, so a picture has a place in it"
+        );
         assert_eq!(
             manifest
                 .image("https://example.test/cover.jpg")
@@ -521,6 +597,107 @@ mod tests {
                 .unwrap()
                 .images
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_v1_synopsis_string_reads_as_paragraphs() {
+        // Before FORMAT_VERSION 2 a synopsis was the site's text, line breaks
+        // and all. A directory written then still opens, and its synopsis is
+        // read as the paragraphs it was written as: the model has no line break
+        // inside a paragraph, and a blank line is how the sites separate them.
+        let legacy = r#"{"format_version":1,
+          "source":{"id":"narou","novel_url":"https://ncode.syosetu.com/n0000aa/"},
+          "title":"t","language":"ja","content_rating":"general",
+          "synopsis":"――一行目の見本です。\n\n二行目の見本です。","chapters":[]}"#;
+
+        let manifest: Manifest = serde_json::from_str(legacy).unwrap();
+
+        assert_eq!(
+            manifest.synopsis,
+            vec![
+                Block::Paragraph {
+                    children: vec![text("――一行目の見本です。")]
+                },
+                Block::Paragraph {
+                    children: vec![text("二行目の見本です。")]
+                },
+            ],
+            "a v1 synopsis is text, and its lines are the paragraphs"
+        );
+    }
+
+    #[test]
+    fn a_synopsis_with_a_picture_survives_a_round_trip() {
+        let mut manifest = Manifest::new(
+            SourceInfo {
+                id: "hameln".into(),
+                novel_url: "https://syosetu.org/novel/000000/".into(),
+                site_title: None,
+            },
+            "見本の作品",
+            "ja",
+        );
+        manifest.synopsis = vec![
+            Block::Paragraph {
+                children: vec![text("あらすじの一行目。")],
+            },
+            Block::Image {
+                src: "images/synopsis-1.png".to_string(),
+                alt: Some("挿絵".to_string()),
+            },
+            Block::Paragraph {
+                children: vec![text("あらすじの二行目。")],
+            },
+        ];
+
+        let json = serde_json::to_string(&manifest).unwrap();
+        let back: Manifest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(back.synopsis, manifest.synopsis);
+        assert!(
+            json.contains(r#""src":"images/synopsis-1.png""#),
+            "the picture is a path in the stored synopsis: {json}"
+        );
+    }
+
+    #[test]
+    fn plain_text_becomes_one_paragraph_per_line() {
+        // What the three text-synopsis adapters hand the model. U+3000 is the
+        // paragraph indent and survives; only ASCII padding goes, and a blank
+        // line — the site's paragraph separator — has nothing left to say.
+        assert_eq!(
+            Block::paragraphs("　一行目の見本です。 \n\n\t二行目の見本です。\n\n"),
+            vec![
+                Block::Paragraph {
+                    children: vec![text("　一行目の見本です。")]
+                },
+                Block::Paragraph {
+                    children: vec![text("二行目の見本です。")]
+                },
+            ]
+        );
+        assert_eq!(Block::paragraphs(""), Vec::new());
+        assert_eq!(Block::paragraphs("\n \n"), Vec::new());
+    }
+
+    #[test]
+    fn an_empty_synopsis_is_omitted() {
+        let manifest = Manifest::new(
+            SourceInfo {
+                id: "narou".into(),
+                novel_url: "https://ncode.syosetu.com/n0000aa/".into(),
+                site_title: None,
+            },
+            "t",
+            "ja",
+        );
+
+        let json = serde_json::to_string(&manifest).unwrap();
+
+        assert!(
+            !json.contains("synopsis"),
+            "nothing to say, so say nothing: {json}"
         );
     }
 }

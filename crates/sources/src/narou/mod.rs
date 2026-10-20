@@ -32,7 +32,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 use url::Url;
 use wnd_core::store::storage::chapter_file_name;
-use wnd_core::{Chapter, ChapterMeta, ContentRating, HttpClient, Manifest, SourceInfo};
+use wnd_core::{Block, Chapter, ChapterMeta, ContentRating, HttpClient, Manifest, SourceInfo};
 
 use toc::parse_toc_page;
 
@@ -160,7 +160,9 @@ impl Source for Narou {
             "ja",
         );
         manifest.author = author;
-        manifest.synopsis = synopsis;
+        manifest.synopsis = synopsis
+            .map(|text| Block::paragraphs(&text))
+            .unwrap_or_default();
         manifest.content_rating = rating_for(&base);
         manifest.chapters = chapter_metas(chapters, &manifest.title, &base);
         Ok(manifest)

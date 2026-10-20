@@ -9,6 +9,8 @@
 pub struct Words {
     /// Title of the generated table of contents.
     pub contents: &'static str,
+    /// Heading of the work's synopsis, where a format gives it a page.
+    pub synopsis: &'static str,
     /// Label for 前書き, the note before the chapter.
     pub preface: &'static str,
     /// Label for 後書き, the note after the chapter.
@@ -28,6 +30,7 @@ impl Words {
         if language.starts_with("ja") {
             Self {
                 contents: "目次",
+                synopsis: "あらすじ",
                 preface: "前書き",
                 afterword: "後書き",
                 scene_break: "＊　＊　＊",
@@ -35,6 +38,7 @@ impl Words {
         } else {
             Self {
                 contents: "Contents",
+                synopsis: "Synopsis",
                 preface: "Author's note",
                 afterword: "Afterword",
                 scene_break: "* * *",

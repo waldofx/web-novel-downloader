@@ -21,8 +21,9 @@ pub fn render(manifest: &Manifest, chapters: &[Chapter], options: &ExportOptions
     if let Some(author) = &manifest.author {
         let _ = writeln!(out, "{author}");
     }
-    if let Some(synopsis) = &manifest.synopsis {
-        let _ = writeln!(out, "\n{synopsis}");
+    if !manifest.synopsis.is_empty() {
+        out.push('\n');
+        blocks(&mut out, &manifest.synopsis, options, &words);
     }
 
     let mut arc: Option<&str> = None;

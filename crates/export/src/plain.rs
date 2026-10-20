@@ -1,7 +1,7 @@
 //! The plain-text projection: what furigana becomes when the format cannot draw
 //! it, and how inline styling is dropped without losing the words.
 
-use wnd_core::Inline;
+use wnd_core::{Block, Inline};
 
 use crate::RubyStyle;
 
@@ -33,6 +33,25 @@ pub fn inlines(nodes: &[Inline], style: RubyStyle) -> String {
         }
     }
     out
+}
+
+/// A block list as one run of prose: paragraphs and headings keep their words,
+/// separated by a blank line; pictures and rules are left out.
+///
+/// For metadata — the EPUB's `dc:description` — which a reader shows as text. A
+/// picture has no place in a description, and its alt text is a caption rather
+/// than the prose around it.
+pub fn blocks(blocks: &[Block], style: RubyStyle) -> String {
+    let paragraphs: Vec<String> = blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children } | Block::Heading { children, .. } => {
+                Some(inlines(children, style))
+            }
+            Block::SceneBreak | Block::HorizontalRule | Block::Image { .. } => None,
+        })
+        .collect();
+    paragraphs.join("\n\n")
 }
 
 #[cfg(test)]

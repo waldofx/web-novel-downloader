@@ -20,6 +20,7 @@ use zip::{CompressionMethod, DateTime, ZipWriter};
 
 use crate::ExportError;
 use crate::ExportOptions;
+use crate::plain;
 use crate::words::Words;
 use crate::xhtml;
 
@@ -94,7 +95,14 @@ pub fn write(
         zip.write_all(&fs::read(dir.root().join(image))?)?;
     }
 
-    // 5. One document per chapter, in reading order. The manifest is where the
+    // 5. The synopsis, when the work has one: it belongs to the work rather than
+    // to the first chapter, so it is a page before chapter one.
+    if !manifest.synopsis.is_empty() {
+        zip.start_file("OEBPS/text/synopsis.xhtml", deflated)?;
+        zip.write_all(synopsis_document(manifest, words).as_bytes())?;
+    }
+
+    // 6. One document per chapter, in reading order. The manifest is where the
     // adapter recorded the arcs, so this is also where we know a chapter is the
     // first of its arc — and therefore where the arc's divider belongs.
     let mut arc: Option<&str> = None;
@@ -109,12 +117,12 @@ pub fn write(
         zip.write_all(chapter_document(manifest, chapter, divider, options, &words).as_bytes())?;
     }
 
-    // 6. The navigation document, and the package that ties it together.
+    // 7. The navigation document, and the package that ties it together.
     zip.start_file("OEBPS/nav.xhtml", deflated)?;
     zip.write_all(nav_document(manifest, chapters, words).as_bytes())?;
 
     zip.start_file("OEBPS/content.opf", deflated)?;
-    zip.write_all(package_document(manifest, chapters, &images, words).as_bytes())?;
+    zip.write_all(package_document(manifest, chapters, &images, options, words).as_bytes())?;
 
     let mut writer = zip.finish()?;
     writer.flush()?;
@@ -134,26 +142,30 @@ fn chapter_href(index: u32) -> String {
     format!("text/{index:04}.xhtml")
 }
 
-/// Every image the index or a chapter refers to, deduplicated and sorted.
+/// Every image the synopsis, the index or a chapter refers to, deduplicated and
+/// sorted.
 ///
 /// Sorted because the archive has to be reproducible: the order images appear in
-/// is the chapter's order, which is stable today, but a sort makes that a
+/// is the author's order, which is stable today, but a sort makes that a
 /// property of this function rather than of its callers.
 fn referenced_images(manifest: &Manifest, chapters: &[Chapter]) -> Vec<String> {
     let mut images = Vec::new();
     if let Some(cover) = &manifest.cover {
         images.push(cover.clone());
     }
-    for chapter in chapters {
-        let blocks = chapter
-            .nodes
-            .iter()
-            .chain(&chapter.pre_note)
-            .chain(&chapter.post_note);
-        for block in blocks {
-            if let Block::Image { src, .. } = block {
-                images.push(src.clone());
-            }
+    let blocks = manifest
+        .synopsis
+        .iter()
+        .chain(chapters.iter().flat_map(|chapter| {
+            chapter
+                .nodes
+                .iter()
+                .chain(&chapter.pre_note)
+                .chain(&chapter.post_note)
+        }));
+    for block in blocks {
+        if let Block::Image { src, .. } = block {
+            images.push(src.clone());
         }
     }
     images.sort();
@@ -251,6 +263,22 @@ fn chapter_document(
     document(&chapter.title, &manifest.language, "../style.css", &body)
 }
 
+/// The work's synopsis, on its own page before chapter one.
+///
+/// It belongs to the work rather than to the first chapter, and the pictures a
+/// Hameln work puts among its lines are the reason it is a document rather than
+/// metadata alone: `dc:description` can hold the words, and only a page can show
+/// the picture beside them.
+fn synopsis_document(manifest: &Manifest, words: Words) -> String {
+    let mut body = String::new();
+    body.push_str("<section epub:type=\"frontmatter\">\n");
+    let _ = writeln!(body, "<h1>{}</h1>", xhtml::escape(&manifest.title));
+    let _ = writeln!(body, "<h2>{}</h2>", xhtml::escape(words.synopsis));
+    body.push_str(&xhtml::blocks(&manifest.synopsis, "../"));
+    body.push_str("</section>\n");
+    document(&manifest.title, &manifest.language, "../style.css", &body)
+}
+
 /// The navigation document, which is the table of contents a reader shows.
 ///
 /// A chapter that belongs to an arc is nested inside it, which is how EPUB 3
@@ -298,6 +326,7 @@ fn package_document(
     manifest: &Manifest,
     chapters: &[Chapter],
     images: &[String],
+    options: &ExportOptions,
     words: Words,
 ) -> String {
     let mut out = String::new();
@@ -326,12 +355,18 @@ fn package_document(
     if let Some(author) = &manifest.author {
         let _ = writeln!(out, "<dc:creator>{}</dc:creator>", xhtml::escape(author));
     }
-    if let Some(synopsis) = &manifest.synopsis {
-        let _ = writeln!(
-            out,
-            "<dc:description>{}</dc:description>",
-            xhtml::escape(synopsis)
-        );
+    if !manifest.synopsis.is_empty() {
+        // The page is the synopsis; this is the same prose for a reader that
+        // shows metadata instead, with the pictures left out — a description is
+        // words, and a reading system would not render a picture inside it.
+        let description = plain::blocks(&manifest.synopsis, options.ruby);
+        if !description.is_empty() {
+            let _ = writeln!(
+                out,
+                "<dc:description>{}</dc:description>",
+                xhtml::escape(&description)
+            );
+        }
     }
     for tag in &manifest.tags {
         let _ = writeln!(out, "<dc:subject>{}</dc:subject>", xhtml::escape(tag));
@@ -355,6 +390,12 @@ fn package_document(
         out,
         "<item id=\"css\" href=\"style.css\" media-type=\"text/css\" />"
     );
+    if !manifest.synopsis.is_empty() {
+        let _ = writeln!(
+            out,
+            "<item id=\"synopsis\" href=\"text/synopsis.xhtml\" media-type=\"application/xhtml+xml\" />"
+        );
+    }
     // Only declare a cover the archive actually carries, or the package would
     // name a file a reader cannot find.
     let cover = manifest
@@ -393,6 +434,9 @@ fn package_document(
     out.push_str("</manifest>\n");
 
     out.push_str("<spine>\n");
+    if !manifest.synopsis.is_empty() {
+        let _ = writeln!(out, "<itemref idref=\"synopsis\" />");
+    }
     for chapter in chapters {
         let _ = writeln!(out, "<itemref idref=\"chapter-{}\" />", chapter.index);
     }
